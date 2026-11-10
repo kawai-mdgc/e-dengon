@@ -1,0 +1,550 @@
+<title>お絵描き伝言ゲーム</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Maru+Gothic:wght@400;500;700&display=swap">
+<style>
+/* Layout: one centered column, a single task per screen (home, lobby, write/draw, wait, reveal). Paper-and-marker look. */
+:root {
+  --bg: #eef1f6;
+  --surface: #ffffff;
+  --ink: #14213d;
+  --muted: #5b6780;
+  --line: #d5dbe7;
+  --accent: #2f5bea;
+  --accent-ink: #ffffff;
+  --hl: #ffd84a;
+  --hl-ink: #14213d;
+  --ok: #1f9d63;
+  --bad: #d6403a;
+  --paper: #ffffff;
+  --display: "Dela Gothic One", "Hiragino Maru Gothic ProN", "Hiragino Sans", sans-serif;
+  --body: "Zen Maru Gothic", "Hiragino Maru Gothic ProN", "Hiragino Sans", "Yu Gothic", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11141c; --surface: #1a1f2c; --ink: #eaeef8; --muted: #98a3bc; --line: #2d3548;
+    --accent: #7c9bff; --accent-ink: #0c1024; --ok: #46c88a; --bad: #ff7a73;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11141c; --surface: #1a1f2c; --ink: #eaeef8; --muted: #98a3bc; --line: #2d3548;
+  --accent: #7c9bff; --accent-ink: #0c1024; --ok: #46c88a; --bad: #ff7a73;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--body); font-size: 16px; line-height: 1.7;
+  padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 56px;
+}
+.wrap { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+main { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+h1, h2, h3 { font-family: var(--display); font-weight: 400; line-height: 1.35; margin: 0; text-wrap: balance; }
+h1 { font-size: clamp(26px, 6vw, 38px); }
+h2 { font-size: clamp(20px, 4.5vw, 26px); }
+h3 { font-size: 17px; }
+p { margin: 0; }
+.muted { color: var(--muted); font-size: 14px; }
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.logo { font-family: var(--display); font-size: 18px; }
+.logo span { background: linear-gradient(transparent 58%, var(--hl) 58% 92%, transparent 92%); color: var(--ink); padding: 0 2px; }
+.chip { font-size: 13px; padding: 4px 12px; border: 1.5px solid var(--line); border-radius: 99px; background: var(--surface); }
+.chip b { font-family: var(--display); font-weight: 400; letter-spacing: .12em; }
+.card { background: var(--surface); border: 1.5px solid var(--line); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.row > * { min-width: 0; }
+label { font-size: 13px; font-weight: 700; color: var(--muted); display: block; margin-bottom: 4px; }
+input, textarea {
+  font: inherit; color: var(--ink); background: var(--bg); border: 1.5px solid var(--line);
+  border-radius: 10px; padding: 10px 12px; width: 100%;
+}
+textarea { resize: vertical; min-height: 88px; }
+input:focus-visible, textarea:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+input.code { font-family: var(--display); letter-spacing: .25em; text-transform: uppercase; text-align: center; font-size: 22px; }
+button {
+  font: inherit; font-weight: 700; cursor: pointer; color: var(--ink);
+  background: var(--surface); border: 1.5px solid var(--ink); border-radius: 10px; padding: 9px 16px;
+  box-shadow: 0 3px 0 var(--ink); transition: transform .06s, box-shadow .06s;
+}
+button:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 0 0 var(--ink); }
+button.primary { background: var(--accent); color: var(--accent-ink); }
+button.ghost { border-color: var(--line); box-shadow: none; font-weight: 500; color: var(--muted); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.flow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 14px; }
+.flow i { font-style: normal; color: var(--muted); }
+.flow b { font-weight: 700; padding: 2px 10px; border-radius: 8px; border: 1.5px solid var(--line); background: var(--surface); }
+.flow b.d { background: var(--hl); color: var(--hl-ink); border-color: var(--hl); }
+ol { margin: 0; padding-left: 1.3em; display: flex; flex-direction: column; gap: 4px; }
+.big-code { font-family: var(--display); font-size: clamp(40px, 12vw, 64px); letter-spacing: .18em; line-height: 1.1; padding-left: .18em; }
+.plist { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.plist li { padding: 6px 14px; border-radius: 99px; background: var(--bg); border: 1.5px solid var(--line); font-weight: 700; }
+.plist li.me { border-color: var(--accent); }
+.plist li small { color: var(--muted); font-weight: 500; margin-left: 6px; }
+.step { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.dots { display: flex; gap: 5px; }
+.dots i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
+.dots i.on { background: var(--accent); }
+.dots i.now { background: var(--hl); outline: 2px solid var(--ink); }
+.quote { font-size: clamp(20px, 5vw, 28px); font-weight: 700; padding: 18px 20px; border-radius: 12px; background: var(--hl); color: var(--hl-ink); overflow-wrap: anywhere; }
+canvas.paper { width: 100%; max-width: 100%; aspect-ratio: 10 / 7; height: auto; background: var(--paper); border: 1.5px solid var(--ink); border-radius: 10px; display: block; touch-action: none; cursor: crosshair; }
+canvas.view { cursor: default; }
+.tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.sw { width: 30px; height: 30px; border-radius: 50%; padding: 0; box-shadow: none; border: 2px solid var(--line); }
+.sw.on { outline: 3px solid var(--accent); outline-offset: 2px; border-color: var(--ink); }
+.sz { width: 36px; height: 36px; padding: 0; box-shadow: none; border-color: var(--line); display: grid; place-items: center; }
+.sz.on { border-color: var(--ink); outline: 2px solid var(--accent); }
+.sz i { display: block; border-radius: 50%; background: var(--ink); }
+.tools button.t { padding: 6px 12px; font-size: 14px; box-shadow: none; border-color: var(--line); }
+.tools button.t.on { border-color: var(--ink); outline: 2px solid var(--accent); }
+.bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; flex: 1; min-width: 60px; }
+.bar i { display: block; height: 100%; background: var(--ok); transition: width .3s; }
+.prog { display: flex; flex-direction: column; gap: 8px; }
+.prog > div { display: flex; align-items: center; gap: 12px; }
+.prog span.n { width: 6.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+.tabs button { box-shadow: none; padding: 5px 14px; border-color: var(--line); font-weight: 500; }
+.tabs button.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.strip { display: flex; gap: 22px; overflow-x: auto; padding: 4px 4px 14px; align-items: stretch; }
+.mini { flex: 0 0 150px; width: 150px; display: flex; flex-direction: column; gap: 4px; position: relative; font-size: 12px; }
+.mini + .mini::before { content: "→"; position: absolute; left: -19px; top: 40%; color: var(--muted); font-size: 16px; }
+.mini .box { flex: 1; min-height: 105px; border: 1.5px solid var(--line); border-radius: 8px; background: var(--surface); padding: 8px; font-size: 14px; font-weight: 700; line-height: 1.45; overflow: hidden; overflow-wrap: anywhere; }
+.mini canvas { width: 100%; aspect-ratio: 10/7; height: auto; border: 1.5px solid var(--line); border-radius: 8px; background: var(--paper); display: block; }
+.steps { display: flex; flex-direction: column; gap: 14px; }
+.sc { display: flex; flex-direction: column; gap: 8px; }
+.sc .who { font-size: 13px; color: var(--muted); font-weight: 700; }
+.sc .who b { background: var(--hl); color: var(--hl-ink); border-radius: 6px; padding: 1px 8px; margin-right: 6px; }
+.sc .tx { font-size: clamp(19px, 4.6vw, 26px); font-weight: 700; overflow-wrap: anywhere; }
+.veiled { opacity: 0; transform: translateY(10px); }
+.sc, .mini { transition: opacity .5s, transform .5s; }
+#toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 18px; border-radius: 10px; font-size: 14px; font-weight: 700; max-width: min(92vw, 460px); z-index: 20; }
+@media (prefers-reduced-motion: reduce) { .sc, .mini, .bar i, button { transition: none; } }
+</style>
+
+<div id="app"><div class="wrap"><p class="muted">読み込み中…</p></div></div>
+<div id="toast" role="status" hidden></div>
+
+<script>
+(function () {
+  "use strict";
+  var W = 600, H = 420;
+  var COLORS = ["#1b1b1f", "#e5484d", "#f5a524", "#f2d12e", "#3fa86b", "#2f6fed", "#8e4ec6", "#8b5a3c"];
+  var PROMPTS = ["宇宙で寝ているネコ", "ラーメンを食べるペンギン", "雨の日の動物園", "空飛ぶ寿司屋", "自転車に乗るカバ", "夜中にこっそりおやつを食べる冷蔵庫",
+    "サングラスをかけた富士山", "お風呂に入るロボット", "忍者の引っ越し", "バナナ vs パイナップル", "雲の上の運動会", "歯医者に行くドラゴン",
+    "海の底のコンビニ", "遅刻しそうなサンタ", "カレーを作る宇宙人", "傘をさすカメ", "ギターを弾くタコ", "魔法使いの朝ごはん",
+    "電車で居眠りするクマ", "月面キャンプ", "迷子のUFO", "スイカ割りに挑むカニ", "ピアノを弾く雪だるま", "夕焼けを見つめるキリン"];
+  var S = { db: null, pid: null, name: "", code: null, room: null, roomReady: false, players: [], entries: new Map(), unsubs: [], busy: false, revChain: null };
+  var lastKey = null, tTimer = null, replayToken = 0;
+
+  /* ---------- helpers ---------- */
+  function h(tag, props) {
+    var e = document.createElement(tag), k, v;
+    props = props || {};
+    for (k in props) {
+      v = props[k];
+      if (k === "class") e.className = v;
+      else if (k.indexOf("on") === 0) e.addEventListener(k.slice(2), v);
+      else if (v === true) e.setAttribute(k, "");
+      else if (v !== false && v != null) e.setAttribute(k, v);
+    }
+    for (var i = 2; i < arguments.length; i++) add(e, arguments[i]);
+    return e;
+  }
+  function add(e, c) {
+    if (Array.isArray(c)) c.forEach(function (x) { add(e, x); });
+    else if (c != null && c !== false) e.append(c);
+  }
+  function $(s) { return document.querySelector(s); }
+  function ls(k, v) {
+    try { if (v === undefined) return localStorage.getItem("edengon." + k); if (v === null) localStorage.removeItem("edengon." + k); else localStorage.setItem("edengon." + k, v); } catch (e) {}
+    return null;
+  }
+  function toast(t) {
+    var el = $("#toast"); el.textContent = t; el.hidden = false;
+    clearTimeout(tTimer); tTimer = setTimeout(function () { el.hidden = true; }, 4200);
+  }
+  function cleanId(s) { return String(s).replace(/[^A-Za-z0-9_\-.~:@+]/g, "_").slice(0, 120); }
+  function nameOf(id) { var p = S.players.find(function (x) { return x.id === id; }); return (p && p.name) || "だれか"; }
+  function genCode() { var a = "ABCDEFGHJKLMNPQRSTUVWXYZ", s = ""; for (var i = 0; i < 4; i++) s += a[Math.floor(Math.random() * a.length)]; return s; }
+  function rpath(sub) { return "rooms/" + S.code + (sub ? "/" + sub : ""); }
+
+  /* ---------- drawing ---------- */
+  function drawStrokes(ctx, strokes) {
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, W, H);
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    strokes.forEach(function (s) {
+      var p = s.p, k;
+      ctx.strokeStyle = s.c; ctx.fillStyle = s.c; ctx.lineWidth = s.w;
+      if (p.length <= 2) { ctx.beginPath(); ctx.arc(p[0], p[1], s.w / 2, 0, 7); ctx.fill(); return; }
+      ctx.beginPath(); ctx.moveTo(p[0], p[1]);
+      for (k = 2; k < p.length - 2; k += 2) ctx.quadraticCurveTo(p[k], p[k + 1], (p[k] + p[k + 2]) / 2, (p[k + 1] + p[k + 3]) / 2);
+      ctx.lineTo(p[p.length - 2], p[p.length - 1]); ctx.stroke();
+    });
+  }
+  function viewCanvas(strokes) {
+    var cv = h("canvas", { width: W, height: H, class: "paper view" });
+    drawStrokes(cv.getContext("2d"), strokes || []);
+    return cv;
+  }
+  function packStrokes(strokes) {
+    var s = strokes.map(function (x) { return { c: x.c, w: x.w, p: x.p.slice() }; });
+    while (JSON.stringify(s).length > 200000) {
+      var changed = false;
+      s.forEach(function (x) {
+        if (x.p.length > 8) {
+          var q = [x.p[0], x.p[1]];
+          for (var k = 2; k < x.p.length - 2; k += 4) q.push(x.p[k], x.p[k + 1]);
+          q.push(x.p[x.p.length - 2], x.p[x.p.length - 1]);
+          x.p = q; changed = true;
+        }
+      });
+      if (!changed) break;
+    }
+    return s;
+  }
+  function makeEditor() {
+    var strokes = [], color = COLORS[0], size = 6, tool = "pen", cur = null;
+    var cv = h("canvas", { width: W, height: H, class: "paper", "aria-label": "お絵描きキャンバス" });
+    var ctx = cv.getContext("2d");
+    function redraw() { drawStrokes(ctx, strokes); }
+    redraw();
+    function eff() { return tool === "eraser" ? { c: "#ffffff", w: Math.round(size * 2.5) } : { c: color, w: size }; }
+    function pt(e) { var r = cv.getBoundingClientRect(); return [Math.round((e.clientX - r.left) * W / r.width), Math.round((e.clientY - r.top) * H / r.height)]; }
+    cv.addEventListener("pointerdown", function (e) {
+      if (e.button > 0) return;
+      e.preventDefault(); cv.setPointerCapture(e.pointerId);
+      var p = pt(e), t = eff();
+      cur = { c: t.c, w: t.w, p: [p[0], p[1]] };
+      ctx.fillStyle = t.c; ctx.beginPath(); ctx.arc(p[0], p[1], t.w / 2, 0, 7); ctx.fill();
+    });
+    cv.addEventListener("pointermove", function (e) {
+      if (!cur) return;
+      var p = pt(e), a = cur.p, lx = a[a.length - 2], ly = a[a.length - 1];
+      if (Math.hypot(p[0] - lx, p[1] - ly) < 2) return;
+      ctx.strokeStyle = cur.c; ctx.lineWidth = cur.w; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(p[0], p[1]); ctx.stroke();
+      a.push(p[0], p[1]);
+    });
+    function end() { if (!cur) return; strokes.push(cur); cur = null; redraw(); }
+    cv.addEventListener("pointerup", end);
+    cv.addEventListener("pointercancel", end);
+
+    var swatches = COLORS.map(function (c) {
+      return h("button", { class: "sw" + (c === color ? " on" : ""), style: "background:" + c, "aria-label": "色 " + c, onclick: function () { color = c; tool = "pen"; sync(); } });
+    });
+    var sizes = [3, 7, 14].map(function (n) {
+      return h("button", { class: "sz" + (n === size ? " on" : ""), "aria-label": "太さ " + n, onclick: function () { size = n; sync(); } }, h("i", { style: "width:" + (n + 2) + "px;height:" + (n + 2) + "px" }));
+    });
+    var penBtn = h("button", { class: "t", onclick: function () { tool = "pen"; sync(); } }, "ペン");
+    var erBtn = h("button", { class: "t", onclick: function () { tool = "eraser"; sync(); } }, "消しゴム");
+    function sync() {
+      swatches.forEach(function (b, i) { b.classList.toggle("on", tool === "pen" && COLORS[i] === color); });
+      sizes.forEach(function (b, i) { b.classList.toggle("on", [3, 7, 14][i] === size); });
+      penBtn.classList.toggle("on", tool === "pen"); erBtn.classList.toggle("on", tool === "eraser");
+    }
+    sync();
+    var el = h("div", { class: "card", style: "padding:14px" },
+      cv,
+      h("div", { class: "tools" }, swatches, h("span", { style: "width:6px" }), sizes),
+      h("div", { class: "tools" }, penBtn, erBtn,
+        h("button", { class: "t", onclick: function () { strokes.pop(); redraw(); } }, "ひとつ戻す"),
+        h("button", { class: "t", onclick: function () { strokes.length = 0; redraw(); } }, "全部消す")));
+    return { el: el, strokes: strokes };
+  }
+
+  /* ---------- game state ---------- */
+  function derive() {
+    var order = S.room.order || [], N = order.length, idx = order.indexOf(S.pid), r, chain;
+    var finished = N > 0 && S.entries.size >= N * N, pending = null, ready = false;
+    if (idx >= 0) {
+      for (r = 0; r < N; r++) {
+        chain = (idx - r + N) % N;
+        if (!S.entries.has(chain + "-" + r)) { pending = { r: r, chain: chain }; ready = r === 0 || S.entries.has(chain + "-" + (r - 1)); break; }
+      }
+    }
+    return { order: order, N: N, idx: idx, finished: finished, pending: pending, ready: ready };
+  }
+  function counts() { var m = {}; S.entries.forEach(function (e) { m[e.author] = (m[e.author] || 0) + 1; }); return m; }
+
+  /* ---------- views ---------- */
+  function header() {
+    return h("header", { class: "top" },
+      h("div", { class: "logo" }, h("span", {}, "お絵描き"), "伝言ゲーム"),
+      S.code ? h("div", { class: "chip" }, "部屋 ", h("b", {}, S.code)) : null);
+  }
+  function shell() {
+    var kids = Array.prototype.slice.call(arguments);
+    return h("div", { class: "wrap" }, header(), h("main", {}, kids));
+  }
+  function view() {
+    if (!S.booted) return { key: "boot", build: function () { return shell(h("p", { class: "muted" }, "読み込み中…")); } };
+    if (!S.db) return { key: "nodb", build: function () { return shell(h("div", { class: "card" }, h("h2", {}, "このページでは遊べません"), h("p", { class: "muted" }, "みんなで遊ぶために共有データベースを使います。Claudeにログインして、書き込み権限(コントリビューター以上)のある状態で開き直してください。"))); } };
+    if (!S.code) return { key: "home", build: vHome };
+    if (!S.roomReady) return { key: "loading", build: function () { return shell(h("p", { class: "muted" }, "部屋に接続中…")); } };
+    if (!S.room) return { key: "gone", build: function () { return shell(h("div", { class: "card" }, h("h2", {}, "部屋が見つかりません"), h("button", { class: "primary", onclick: leave }, "ホームに戻る"))); } };
+    if (S.room.phase === "lobby") return { key: "lobby", build: vLobby, update: updLobby };
+    var g = derive();
+    if (g.finished) return { key: "reveal", build: vReveal };
+    if (g.idx < 0) return { key: "spec", build: function () { return shell(h("div", { class: "card" }, h("h2", {}, "ゲームが始まっています"), h("p", { class: "muted" }, "途中参加はできません。終わると結果だけ見られます。"), h("button", { onclick: leave }, "ホームに戻る"))); } };
+    if (g.pending && g.ready) return { key: "play:" + g.pending.r, build: function () { return vCompose(g); } };
+    return { key: "wait:" + (g.pending ? g.pending.r : "done"), build: vWait, update: updWait };
+  }
+  function render() {
+    var v = view(), app = $("#app");
+    if (v.key !== lastKey) { lastKey = v.key; app.replaceChildren(v.build()); }
+    else if (v.update) v.update();
+  }
+
+  function vHome() {
+    var nick = h("input", { id: "nick", maxlength: "12", placeholder: "例: たろう", value: S.name, autocomplete: "nickname" });
+    var codeIn = h("input", { id: "code", class: "code", maxlength: "4", placeholder: "ABCD", autocomplete: "off" });
+    var m = location.hash.match(/^#room-([A-Za-z0-9]{4})$/); if (m) codeIn.value = m[1].toUpperCase();
+    function nm() { var n = nick.value.trim(); if (!n) { toast("ニックネームを入れてください"); nick.focus(); return null; } S.name = n; ls("name", n); return n; }
+    return shell(
+      h("section", { style: "display:flex;flex-direction:column;gap:12px" },
+        h("h1", {}, "描いて、伝えて、ずれていく。"),
+        h("div", { class: "flow", "aria-label": "ゲームの流れ" }, h("b", {}, "お題"), h("i", {}, "→"), h("b", { class: "d" }, "絵"), h("i", {}, "→"), h("b", {}, "文章"), h("i", {}, "→"), h("b", { class: "d" }, "絵"), h("i", {}, "→ … →"), h("b", {}, "結果発表"))),
+      h("div", { class: "card" },
+        h("div", {}, h("label", { for: "nick" }, "ニックネーム"), nick),
+        h("button", { class: "primary", onclick: function () { if (nm()) createRoom(); } }, "部屋をつくる"),
+        h("hr", { style: "border:0;border-top:1.5px dashed var(--line);width:100%;margin:2px 0" }),
+        h("div", {}, h("label", { for: "code" }, "友だちの部屋コード"), codeIn),
+        h("button", { onclick: function () { if (nm()) joinRoom(codeIn.value.trim().toUpperCase()); } }, "参加する")),
+      h("div", { class: "card" },
+        h("h3", {}, "遊び方"),
+        h("ol", {},
+          h("li", {}, "全員が自分のお題を文章で書きます。"),
+          h("li", {}, "隣の人のお題を、絵に描きます。"),
+          h("li", {}, "回ってきた絵を見て、何の絵かを文章で書きます。"),
+          h("li", {}, "絵と文章を交互に回して、全員が全部のお題に触れたら結果発表です。")),
+        h("p", { class: "muted" }, "2〜10人で遊べます。前の人の作品だけを見て、次の人が作ります。")));
+  }
+
+  function plistItems() {
+    return S.players.map(function (p) {
+      return h("li", { class: p.id === S.pid ? "me" : "" }, p.name, p.id === S.room.host ? h("small", {}, "ホスト") : null);
+    });
+  }
+  function vLobby() {
+    var isHost = S.room.host === S.pid;
+    return shell(
+      h("div", { class: "card" },
+        h("p", { class: "muted" }, "この部屋コードを友だちに伝えてください"),
+        h("div", { class: "big-code", id: "bigcode" }, S.code),
+        h("div", { class: "row" },
+          h("button", { onclick: function () { copy(S.code); } }, "コードをコピー"))),
+      h("div", { class: "card" },
+        h("h3", { id: "pcount" }),
+        h("ul", { class: "plist", id: "plist" }),
+        isHost
+          ? h("div", { class: "row" }, h("button", { class: "primary", id: "startbtn", onclick: startGame }, "ゲーム開始"), h("span", { class: "muted", id: "starthint" }))
+          : h("p", { class: "muted" }, "ホストが始めるのを待っています…")),
+      h("button", { class: "ghost", onclick: leave, style: "align-self:flex-start" }, "部屋を出る"));
+  }
+  function updLobby() {
+    $("#plist").replaceChildren.apply($("#plist"), plistItems());
+    $("#pcount").textContent = "参加者 " + S.players.length + "人";
+    var b = $("#startbtn");
+    if (b) { b.disabled = S.players.length < 2 || S.busy; $("#starthint").textContent = S.players.length < 2 ? "2人以上で始められます" : ""; }
+  }
+
+  function vCompose(g) {
+    var r = g.pending.r, chain = g.pending.chain, N = g.N, isDraw = r % 2 === 1;
+    var prev = r > 0 ? S.entries.get(chain + "-" + (r - 1)) : null;
+    var dots = h("div", { class: "dots", "aria-hidden": "true" });
+    for (var i = 0; i < N; i++) dots.append(h("i", { class: i < r ? "on" : i === r ? "now" : "" }));
+    var title = r === 0 ? "お題を書こう" : isDraw ? "この文章を絵にしよう" : "この絵を文章にしよう";
+    var head = h("div", { class: "step" }, h("h2", {}, title), h("div", { class: "row" }, h("span", { class: "muted" }, (r + 1) + " / " + N), dots));
+    var body, getPayload;
+    if (isDraw) {
+      var ed = makeEditor();
+      body = [h("div", { class: "quote" }, prev ? prev.text : ""), ed.el];
+      getPayload = function () {
+        if (!ed.strokes.length) { toast("何か描いてから「できた」を押してください"); return null; }
+        return { strokes: packStrokes(ed.strokes) };
+      };
+    } else {
+      var ta = h("textarea", { id: "txt", maxlength: "60", placeholder: r === 0 ? "例: 宇宙で寝ているネコ" : "この絵は何でしょう? 短く説明してください" });
+      var rnd = r === 0 ? h("button", { class: "ghost", onclick: function () { ta.value = PROMPTS[Math.floor(Math.random() * PROMPTS.length)]; } }, "ランダムお題") : null;
+      body = [
+        prev ? viewCanvas(prev.strokes) : null,
+        h("div", {}, h("label", { for: "txt" }, r === 0 ? "次の人が絵に描きます" : "次の人は、この文章だけを見て描きます"), ta, rnd ? h("div", { style: "margin-top:8px" }, rnd) : null)];
+      getPayload = function () {
+        var t = ta.value.trim();
+        if (!t) { toast("文章を入れてください"); ta.focus(); return null; }
+        return { text: t };
+      };
+    }
+    var btn = h("button", { class: "primary", onclick: function () {
+      var p = getPayload(); if (!p) return;
+      btn.disabled = true; submit(g, p).then(function (ok) { if (!ok) btn.disabled = false; });
+    } }, "できた");
+    return shell(head, body, h("div", {}, btn));
+  }
+  function submit(g, payload) {
+    var r = g.pending.r, chain = g.pending.chain;
+    var doc = Object.assign({ chain: chain, round: r, author: S.pid, type: r % 2 === 1 ? "draw" : "text" }, payload);
+    return S.db.doc(rpath("entries/" + chain + "-" + r)).set(doc).then(function () { return true; }, function (e) {
+      toast(e && e.code === "quota_exceeded" ? "データの上限に達しました" : "送信できませんでした。もう一度押してください"); return false;
+    });
+  }
+
+  function vWait() {
+    return shell(
+      h("div", { class: "card" }, h("h2", { id: "wtitle" }), h("p", { class: "muted", id: "wsub" }), h("div", { class: "prog", id: "prog" })),
+      S.room.host === S.pid ? h("div", { class: "card" }, h("p", { class: "muted" }, "誰かが戻ってこない? 止まっているところを空欄にして先へ進められます。"), h("div", {}, h("button", { onclick: fillBlanks }, "空欄で先へ進める"))) : null);
+  }
+  function updWait() {
+    var g = derive(), c = counts();
+    $("#wtitle").textContent = g.pending ? "前の人を待っています" : "全員の完成を待っています";
+    $("#wsub").textContent = g.pending ? "前の人が終わると、あなたの番が始まります。" : "あなたの分は提出済みです。みんなが終わると結果発表です。";
+    var box = $("#prog");
+    box.replaceChildren.apply(box, g.order.map(function (id) {
+      var n = c[id] || 0;
+      return h("div", {}, h("span", { class: "n" }, nameOf(id)), h("div", { class: "bar" }, h("i", { style: "width:" + Math.round(n / g.N * 100) + "%" })), h("span", { class: "muted" }, n + "/" + g.N));
+    }));
+  }
+
+  function stepLabel(r, e) { return r === 0 ? "お題" : e.type === "draw" ? "絵" : "説明"; }
+  function vReveal() {
+    var g = derive(), N = g.N;
+    if (S.revChain == null) S.revChain = Math.max(0, g.idx);
+    var tabs = h("div", { class: "tabs" });
+    var out = h("div", { style: "display:flex;flex-direction:column;gap:20px;min-width:0" });
+    function fill() {
+      var k = S.revChain, steps = [], r;
+      for (r = 0; r < N; r++) steps.push(S.entries.get(k + "-" + r));
+      tabs.replaceChildren.apply(tabs, g.order.map(function (id, i) {
+        return h("button", { class: i === k ? "on" : "", onclick: function () { S.revChain = i; replayToken++; fill(); } }, nameOf(id) + "のお題");
+      }));
+      var first = steps[0] && steps[0].text || "";
+      var minis = steps.map(function (e, i) {
+        if (!e) return h("div", { class: "mini" });
+        return h("div", { class: "mini" }, h("span", { class: "muted" }, stepLabel(i, e)),
+          e.type === "draw" ? viewCanvas(e.strokes) : h("div", { class: "box" }, e.text));
+      });
+      var cards = steps.map(function (e, i) {
+        if (!e) return h("div", { class: "sc" });
+        return h("div", { class: "sc" },
+          h("div", { class: "who" }, h("b", {}, stepLabel(i, e)), nameOf(e.author)),
+          e.type === "draw" ? viewCanvas(e.strokes) : h("div", { class: i === 0 ? "quote" : "tx" }, e.text));
+      });
+      var replayBtn = h("button", { onclick: function () {
+        var tok = ++replayToken; replayBtn.disabled = true;
+        minis.concat(cards).forEach(function (el) { el.classList.add("veiled"); });
+        steps.forEach(function (_, i) {
+          setTimeout(function () {
+            if (tok !== replayToken) return;
+            minis[i].classList.remove("veiled"); cards[i].classList.remove("veiled");
+            cards[i].scrollIntoView({ behavior: "smooth", block: "center" });
+            if (i === steps.length - 1) replayBtn.disabled = false;
+          }, 400 + i * 1800);
+        });
+        out.scrollIntoView({ behavior: "smooth", block: "start" });
+      } }, "▶ 順番に再生");
+      out.replaceChildren(
+        h("div", { class: "step" }, h("h3", {}, "「" + first + "」の旅"), replayBtn),
+        h("div", { class: "strip", "aria-label": "全体の流れ" }, minis),
+        h("div", { class: "steps" }, cards));
+    }
+    fill();
+    return shell(
+      h("div", { style: "display:flex;flex-direction:column;gap:10px" }, h("h1", {}, "結果発表"), h("p", { class: "muted" }, "お題ごとに、どう変わっていったかを見られます。")),
+      tabs, out,
+      h("div", {}, h("button", { onclick: leave }, "ホームに戻る")));
+  }
+
+  /* ---------- actions ---------- */
+  function copy(t) {
+    try { navigator.clipboard.writeText(t).then(function () { toast("コピーしました"); }, function () { toast("コード: " + t); }); }
+    catch (e) { toast("コード: " + t); }
+  }
+  function enter(code) {
+    S.code = code; S.room = null; S.roomReady = false; S.players = []; S.entries = new Map(); S.revChain = null;
+    ls("room", code);
+    try { location.hash = "room-" + code; } catch (e) {}
+    var fail = function (e) { toast(e && e.code === "revoked" ? "アクセス権が変わりました" : "接続でエラーが起きました"); };
+    S.unsubs.push(S.db.doc(rpath()).onSnapshot(function (s) { S.room = s.exists ? s.data() : null; S.roomReady = true; render(); }, fail));
+    S.unsubs.push(S.db.collection(rpath("players")).onSnapshot(function (q) {
+      S.players = q.docs.map(function (d) { var v = d.data(); return { id: d.id, name: v.name, joinedAt: v.joinedAt || 0 }; })
+        .sort(function (a, b) { return a.joinedAt - b.joinedAt || (a.id < b.id ? -1 : 1); });
+      render();
+    }, fail));
+    S.unsubs.push(S.db.collection(rpath("entries")).onSnapshot(function (q) {
+      var m = new Map(); q.docs.forEach(function (d) { m.set(d.id, d.data()); }); S.entries = m; render();
+    }, fail));
+    setTimeout(function () { if (S.code === code && !S.roomReady) toast("接続に時間がかかっています。ネットワークを確認してください"); }, 10000);
+    render();
+  }
+  function leave() {
+    var wasLobby = S.room && S.room.phase === "lobby", code = S.code;
+    S.unsubs.forEach(function (u) { u(); }); S.unsubs = [];
+    if (wasLobby && code) S.db.doc("rooms/" + code + "/players/" + S.pid).delete().catch(function () {});
+    S.code = null; S.room = null; S.roomReady = false; ls("room", null);
+    try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
+    render();
+  }
+  function joinPlayer(code) { return S.db.doc("rooms/" + code + "/players/" + S.pid).set({ name: S.name, joinedAt: Date.now() }); }
+  function createRoom() {
+    (function attempt(n) {
+      var c = genCode();
+      S.db.doc("rooms/" + c).get().then(function (s) {
+        if (s.exists) { if (n < 5) return attempt(n + 1); throw new Error("busy"); }
+        return S.db.doc("rooms/" + c).set({ host: S.pid, phase: "lobby", createdAt: Date.now() })
+          .then(function () { return joinPlayer(c); }).then(function () { enter(c); });
+      }).catch(function () { toast("部屋をつくれませんでした。もう一度お試しください"); });
+    })(0);
+  }
+  function joinRoom(c) {
+    if (!/^[A-Z]{4}$/.test(c)) { toast("部屋コードは英字4文字です"); return; }
+    Promise.all([S.db.doc("rooms/" + c).get(), S.db.collection("rooms/" + c + "/players").get()]).then(function (res) {
+      var rs = res[0], ps = res[1], mine = ps.docs.some(function (d) { return d.id === S.pid; });
+      if (!rs.exists) { toast("その部屋は見つかりません"); return; }
+      if (rs.data().phase !== "lobby" && !mine) { toast("その部屋はもう始まっています"); return; }
+      if (ps.size >= 10 && !mine) { toast("その部屋は満員です(10人まで)"); return; }
+      return joinPlayer(c).then(function () { enter(c); });
+    }).catch(function () { toast("参加できませんでした"); });
+  }
+  function startGame() {
+    if (S.players.length < 2) return;
+    S.busy = true;
+    S.db.doc(rpath()).update({ phase: "play", order: S.players.map(function (p) { return p.id; }), startedAt: Date.now() })
+      .catch(function () { toast("開始できませんでした"); }).then(function () { S.busy = false; });
+  }
+  function fillBlanks() {
+    var g = derive(), N = g.N, jobs = [], c, r;
+    for (r = 0; r < N; r++) for (c = 0; c < N; c++) {
+      if (!S.entries.has(c + "-" + r) && (r === 0 || S.entries.has(c + "-" + (r - 1)))) {
+        var d = { chain: c, round: r, author: g.order[(c + r) % N], type: r % 2 === 1 ? "draw" : "text", filled: true };
+        if (d.type === "draw") d.strokes = []; else d.text = "(未提出)";
+        jobs.push(S.db.doc(rpath("entries/" + c + "-" + r)).set(d));
+      }
+    }
+    if (!jobs.length) { toast("進めるところがありません"); return; }
+    Promise.all(jobs).then(function () { toast("空欄で進めました"); }, function () { toast("進められませんでした"); });
+  }
+
+  /* ---------- boot ---------- */
+  window.addEventListener("hashchange", function () { if (!S.code && lastKey === "home") { lastKey = null; render(); } });
+  S.name = ls("name") || "";
+  render();
+  (async function () {
+    try {
+      var c = window.claude;
+      var db = c && await c.use("db"), user = c && await c.use("user");
+      var id = user && await user.id();
+      if (!db || !id) { S.booted = true; render(); return; }
+      var can = user.can ? await user.can("data.write") : null;
+      if (can === false) { S.booted = true; render(); return; }
+      S.db = db; S.pid = cleanId(id); S.booted = true;
+      var saved = ls("room");
+      if (saved && /^[A-Z]{4}$/.test(saved)) {
+        var rs = await db.doc("rooms/" + saved).get(), ps = await db.doc("rooms/" + saved + "/players/" + S.pid).get();
+        if (rs.exists && ps.exists) { S.name = ps.data().name || S.name; enter(saved); return; }
+        ls("room", null);
+      }
+      lastKey = null; render();
+    } catch (e) { S.booted = true; render(); }
+  })();
+})();
+</script>
