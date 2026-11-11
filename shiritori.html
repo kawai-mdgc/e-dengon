@@ -11,19 +11,19 @@
 :root {
   --bg: #eef1f6; --surface: #ffffff; --ink: #14213d; --muted: #5b6780; --line: #d5dbe7;
   --accent: #2f5bea; --accent-ink: #ffffff; --hl: #ffd84a; --hl-ink: #14213d;
-  --ok: #1f9d63; --bad: #d6403a; --paper: #ffffff;
+  --ok: #1f9d63; --bad: #d6403a; --paper: #ffffff; --glow: rgba(214, 64, 58, .6);
   --display: "Dela Gothic One", "Hiragino Maru Gothic ProN", "Hiragino Sans", sans-serif;
   --body: "Zen Maru Gothic", "Hiragino Maru Gothic ProN", "Hiragino Sans", "Yu Gothic", sans-serif;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #11141c; --surface: #1a1f2c; --ink: #eaeef8; --muted: #98a3bc; --line: #2d3548;
-    --accent: #7c9bff; --accent-ink: #0c1024; --ok: #46c88a; --bad: #ff7a73; color-scheme: dark;
+    --accent: #7c9bff; --accent-ink: #0c1024; --ok: #46c88a; --bad: #ff7a73; --glow: rgba(255, 122, 115, .6); color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #11141c; --surface: #1a1f2c; --ink: #eaeef8; --muted: #98a3bc; --line: #2d3548;
-  --accent: #7c9bff; --accent-ink: #0c1024; --ok: #46c88a; --bad: #ff7a73; color-scheme: dark;
+  --accent: #7c9bff; --accent-ink: #0c1024; --ok: #46c88a; --bad: #ff7a73; --glow: rgba(255, 122, 115, .6); color-scheme: dark;
 }
 * { box-sizing: border-box; }
 body {
@@ -104,7 +104,7 @@ canvas.view { cursor: default; }
 .seg button:disabled:not(.on) { color: var(--muted); }
 .bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
 .bar i { display: block; height: 100%; background: var(--ok); transition: width .3s; }
-.strip { display: flex; gap: 22px; overflow-x: auto; padding: 4px 4px 14px; align-items: stretch; }
+.strip { display: flex; gap: 22px; overflow-x: auto; padding: 18px 18px 16px; margin: -14px -14px -4px; align-items: stretch; }
 .mini { flex: 0 0 150px; width: 150px; display: flex; flex-direction: column; gap: 4px; position: relative; font-size: 12px; }
 .mini + .mini::before { content: "→"; position: absolute; left: -19px; top: 30%; color: var(--muted); font-size: 16px; }
 .mini canvas { width: 100%; aspect-ratio: 10/7; height: auto; border: 1.5px solid var(--line); border-radius: 8px; background: var(--paper); display: block; }
@@ -117,9 +117,21 @@ canvas.view { cursor: default; }
 .sc .g { font-size: 14px; }
 .ok { color: var(--ok); font-weight: 700; }
 .ng { color: var(--bad); font-weight: 700; }
-.chain { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; font-weight: 700; }
-.chain i { font-style: normal; color: var(--muted); }
-.chain s { color: var(--bad); font-weight: 500; font-size: 13px; }
+.mini.new canvas { border-color: var(--bad); box-shadow: 0 0 0 2px var(--bad), 0 0 16px 4px var(--glow); }
+.mini.new b { color: var(--bad); }
+.chain { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; font-weight: 700; font-size: 20px; line-height: 1.5; }
+.chain i { font-style: normal; color: var(--muted); font-size: 16px; padding-left: 6px; }
+.chain .ng { display: inline-block; padding: 0 10px; border-radius: 8px; border: 1.5px solid var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); }
+.chain .ng small { font-size: 14px; font-weight: 500; margin-left: 4px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.thumb { display: flex; flex-direction: column; gap: 4px; padding: 6px; text-align: left; box-shadow: none; border-color: var(--line); background: var(--surface); font-weight: 700; min-width: 0; }
+.thumb canvas { width: 100%; aspect-ratio: 10 / 7; height: auto; border: 1.5px solid var(--line); border-radius: 8px; background: var(--paper); display: block; }
+.thumb span { overflow-wrap: anywhere; font-size: 14px; }
+.ov { position: fixed; inset: 0; background: rgba(10, 14, 28, .72); display: flex; align-items: flex-start; justify-content: center; padding: max(16px, env(safe-area-inset-top, 0px)) 16px 16px; overflow-y: auto; z-index: 30; }
+.ov .card { width: min(640px, 100%); }
+dl.info { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
+dl.info dt { color: var(--muted); font-size: 13px; font-weight: 700; }
+dl.info dd { margin: 0; overflow-wrap: anywhere; }
 .veiled { opacity: 0; transform: translateY(10px); }
 .sc, .mini { transition: opacity .5s, transform .5s; }
 #toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 18px; border-radius: 10px; font-size: 14px; font-weight: 700; max-width: min(92vw, 460px); z-index: 20; }
@@ -137,7 +149,7 @@ canvas.view { cursor: default; }
   var COLORS = ["#1b1b1f", "#e5484d", "#f5a524", "#f2d12e", "#3fa86b", "#2f6fed", "#8e4ec6", "#8b5a3c"];
   var TOPICS = ["りんご", "ねこ", "さかな", "ひこうき", "じてんしゃ", "うさぎ", "いちご", "ひまわり", "とけい", "かさ", "ろけっと", "すいか", "たいよう", "おにぎり", "ぼうし", "くつ", "でんしゃ", "にじ", "くじら", "かめ", "さくら", "たこ", "ぶた", "とまと", "ばなな", "めがね", "たまご", "ちょうちょ", "こたつ", "くつした", "らくだ", "いるか", "まくら", "ゆきだるま", "でんわ", "ぶどう", "さんた", "ごりら", "らっぱ", "ぴあの", "かぼちゃ", "てんとうむし", "おばけ", "ほうき", "どーなつ", "ぱんだ", "しろくま", "あひる", "かえる", "へび"];
   var SMALL = { "ぁ": "あ", "ぃ": "い", "ぅ": "う", "ぇ": "え", "ぉ": "お", "ゃ": "や", "ゅ": "ゆ", "ょ": "よ", "ゎ": "わ", "っ": "つ" };
-  var DEFAULTS = { laps: 2, nRule: true, vis: "live" };
+  var DEFAULTS = { laps: 2, vis: "live" }; /* laps: 0 = 無限(終了ボタンで終わる) */
   var S = { isHost: false, pid: null, name: "", code: null, room: null, roomReady: false, players: [], entries: new Map(), rejCb: null };
   var lastKey = null, tTimer = null, replayToken = 0;
   var peer = null, hostConn = null, conns = {};
@@ -181,19 +193,25 @@ canvas.view { cursor: default; }
   function lastKana(s) { s = s.replace(/ー+$/, ""); var c = s.slice(-1); return SMALL[c] || c; }
   function firstKana(s) { var c = s.charAt(0); return SMALL[c] || c; }
   function endsN(w) { return !!w && lastKana(norm(w)) === "ん"; }
+  /* 比較用: 点(゛)や丸(゜)は無視する。こ=ご、は=ば=ぱ */
+  function base(s) { return norm(s).normalize("NFD").replace(/[゙゚]/g, "").split("").map(function (c) { return SMALL[c] || c; }).join(""); }
+  function same(a, b) { return base(a) === base(b); }
+  /* 答えの先頭の文字のヒント(2人目より先で使う): 前の人の答えの最後の文字 */
+  function hintFor(entries, t) { var p = t >= 2 ? entries.get(String(t - 1)) : null; return p && p.guess ? lastKana(norm(p.guess)) : null; }
   function checkTurn(room, entries, t, e) {
-    var word = norm(e.word), set = room.settings || DEFAULTS, guess;
+    var word = norm(e.word), guess, hint;
     if (!isKana(word) || word.length < 2) return "言葉はひらがな2文字以上で入れてください";
     if (t === 0) { if (word !== norm(room.topic)) return "お題の言葉で描いてください"; }
     else {
       guess = norm(e.guess);
       if (!isKana(guess)) return "答えはひらがなで入れてください";
       if (lastKana(guess) === "ん") return "「ん」で終わる答えは使えません。別の答えを考えてください";
-      if (firstKana(word) !== lastKana(guess)) return "「" + lastKana(guess) + "」から始まる言葉にしてください";
+      hint = hintFor(entries, t);
+      if (hint && !same(firstKana(guess), hint)) return "この絵は「" + hint + "」から始まる言葉です。答えもそこから始めてください";
+      if (!same(firstKana(word), lastKana(guess))) return "「" + lastKana(guess) + "」から始まる言葉にしてください";
     }
-    var dup = false; entries.forEach(function (v) { if (norm(v.word) === word) dup = true; });
+    var dup = false; entries.forEach(function (v) { if (same(v.word, word)) dup = true; });
     if (dup) return "その言葉はもう使われています";
-    if (endsN(word) && !set.nRule) return "「ん」で終わる言葉は使えません";
     if (!Array.isArray(e.strokes) || !e.strokes.length) return "絵を描いてから完成を押してください";
     return null;
   }
@@ -283,8 +301,8 @@ canvas.view { cursor: default; }
   /* ---------- game state ---------- */
   function derive() {
     var order = S.room.order || [], N = order.length, set = S.room.settings || DEFAULTS, n = S.entries.size;
-    var last = n ? S.entries.get(String(n - 1)) : null, total = N * set.laps;
-    var nEnd = !!(last && set.nRule && endsN(last.word));
+    var last = n ? S.entries.get(String(n - 1)) : null, total = set.laps ? N * set.laps : Infinity;
+    var nEnd = !!(last && endsN(last.word));
     return {
       order: order, N: N, idx: order.indexOf(S.pid), n: n, total: total, turn: n, cur: order[n % N], last: last, nEnd: nEnd, set: set,
       finished: !!S.room.ended || n >= total || nEnd
@@ -305,7 +323,7 @@ canvas.view { cursor: default; }
   }
   function shell() { return h("div", { class: "wrap" }, header(), h("main", {}, Array.prototype.slice.call(arguments))); }
   function view() {
-    if (!S.code) return { key: "home", build: vHome };
+    if (!S.code) return S.album ? { key: "album", build: vAlbum } : { key: "home", build: vHome };
     if (!S.roomReady) return { key: "loading", build: function () { return shell(h("p", { class: "muted" }, "部屋に接続中…")); } };
     if (!S.room) return { key: "gone", build: function () { return shell(h("div", { class: "card" }, h("h2", {}, "部屋が見つかりません"), h("button", { class: "primary", onclick: backHome }, "ホームに戻る"))); } };
     if (S.room.phase === "lobby") return { key: "lobby", build: vLobby, update: updLobby };
@@ -334,6 +352,7 @@ canvas.view { cursor: default; }
       h("section", { class: "col", style: "gap:12px" },
         h("h1", {}, "絵で、しりとり。"),
         h("div", { class: "flow", "aria-label": "ゲームの流れ" }, h("b", { class: "d" }, "絵を描く"), h("i", {}, "→"), h("b", {}, "何の絵か答える"), h("i", {}, "→"), h("b", { class: "d" }, "最後の文字から絵を描く"), h("i", {}, "→ … →"), h("b", {}, "答え合わせ"))),
+      h("div", {}, h("button", { onclick: function () { S.album = true; render(); } }, "アルバム")),
       h("div", { class: "card" }, nameCard, m ? [joinBox, h("hr", { style: "border:0;border-top:1.5px dashed var(--line);width:100%;margin:2px 0" }), createBtn] : [createBtn, h("hr", { style: "border:0;border-top:1.5px dashed var(--line);width:100%;margin:2px 0" }), joinBox]),
       h("div", { class: "card" },
         h("h3", {}, "遊び方"),
@@ -355,12 +374,10 @@ canvas.view { cursor: default; }
     var box = $("#settings"), set = S.room.settings || DEFAULTS, hostOk = S.isHost;
     box.replaceChildren(
       h("div", {}, h("label", {}, "何周するか(人数×周回数の枚数でおしまい)"),
-        seg([[1, "1周"], [2, "2周"], [3, "3周"]], set.laps, hostOk, function (v) { setOpt("laps", v); })),
-      h("div", {}, h("label", {}, "「ん」で終わる言葉"),
-        seg([[true, "描いた人の負けで終了"], [false, "使えない"]], set.nRule, hostOk, function (v) { setOpt("nRule", v); })),
+        seg([[1, "1周"], [2, "2周"], [3, "3周"], [0, "無限"]], set.laps, hostOk, function (v) { setOpt("laps", v); })),
       h("div", {}, h("label", {}, "順番を待っている人から見える絵"),
         seg([["live", "完成した絵だけ見える"], ["secret", "完全シークレット"]], set.vis, hostOk, function (v) { setOpt("vis", v); })),
-      h("p", { class: "muted" }, hostOk ? "ホストだけが変えられます。ゲーム中でも、ホストは「ここで終了」で結果発表にできます。" : "設定はホストが決めます。"));
+      h("p", { class: "muted" }, (hostOk ? "ホストだけが変えられます。" : "設定はホストが決めます。") + "「ん」で終わる言葉を描いた人の負けで終了します。「無限」のときは、ホストの「ここで終了」で終わります。"));
   }
   function vLobby() {
     var isHost = S.isHost;
@@ -420,13 +437,17 @@ canvas.view { cursor: default; }
         var gs = norm(guessIn.value);
         if (!isKana(gs)) { toast("答えはひらがなで入れてください"); return; }
         if (lastKana(gs) === "ん") { toast("「ん」で終わる答えは使えません。別の答えを考えてください"); return; }
+        var hn = hintFor(S.entries, t);
+        if (hn && !same(firstKana(gs), hn)) { toast("この絵は「" + hn + "」から始まる言葉です。答えもそこから始めてください"); return; }
         startMsg.textContent = "「" + lastKana(gs) + "」から始まる言葉を描こう";
         wordIn.placeholder = lastKana(gs) + "…"; drawBox.hidden = false; wordIn.focus();
       } }, "決定");
       drawBox.append(startMsg, h("div", {}, h("label", { for: "word" }, "描く言葉(ひらがな)"), wordIn), ed.el, go);
       body = [
         h("div", { class: "card" }, h("h3", {}, "前の人が描いた絵"), viewCanvas(prev ? prev.strokes : [])),
-        h("div", { class: "card" }, h("div", {}, h("label", { for: "guess" }, "この絵は何? ひらがなで答えてください"), guessIn), h("div", {}, gbtn)),
+        h("div", { class: "card" },
+          hintFor(S.entries, t) ? h("p", { class: "quote" }, "ヒント: この絵は「" + hintFor(S.entries, t) + "」から始まる言葉です") : null,
+          h("div", {}, h("label", { for: "guess" }, "この絵は何? ひらがなで答えてください"), guessIn), h("div", {}, gbtn)),
         drawBox];
     }
     go.addEventListener("click", function () {
@@ -438,7 +459,18 @@ canvas.view { cursor: default; }
       go.disabled = true;
       submit(ent).then(function (ok) { if (!ok) go.disabled = false; });
     });
-    return shell(orderStrip(g), h("div", { class: "step" }, h("h2", {}, "あなたの番です"), h("span", { class: "muted" }, (t + 1) + " / " + g.total + " 枚目")), body);
+    return shell(orderStrip(g), h("div", { class: "step" }, h("h2", {}, "あなたの番です"), h("span", { class: "muted" }, countText(g))), body,
+      S.isHost && t > 0 ? h("div", {}, h("button", { class: "ghost", onclick: endNow }, "ここで終了して結果を見る")) : null);
+  }
+  function countText(g) { return g.total === Infinity ? (g.turn + 1) + "枚目" : (g.turn + 1) + " / " + g.total + " 枚目"; }
+  function logStrip(g) {
+    var list = [], i;
+    for (i = 0; i < g.n; i++) list.push(S.entries.get(String(i)));
+    var strip = h("div", { class: "strip", "aria-label": "これまでの絵" }, list.map(function (e, k) {
+      return h("div", { class: "mini" + (k === list.length - 1 ? " new" : "") }, viewCanvas(e.strokes), h("b", {}, (k + 1) + "枚目"), h("span", { class: "muted" }, nameOf(e.author)));
+    }));
+    requestAnimationFrame(function () { strip.scrollLeft = strip.scrollWidth; });
+    return strip;
   }
 
   function vWait() {
@@ -451,32 +483,121 @@ canvas.view { cursor: default; }
     var g = derive();
     $("#ord").replaceChildren(orderStrip(g));
     $("#wtitle").textContent = nameOf(g.cur) + "さんが描いています";
-    $("#wsub").textContent = g.n + " / " + g.total + " 枚完成";
-    $("#wbar").style.width = Math.round(g.n / g.total * 100) + "%";
+    $("#wsub").textContent = g.total === Infinity ? g.n + "枚完成" : g.n + " / " + g.total + " 枚完成";
+    $("#wbar").parentNode.hidden = g.total === Infinity;
+    $("#wbar").style.width = g.total === Infinity ? "0" : Math.round(g.n / g.total * 100) + "%";
     var live = $("#wlive");
     if (live.dataset.n === g.n + g.set.vis) return;
     live.dataset.n = g.n + g.set.vis;
     if (g.set.vis === "secret") live.replaceChildren(h("p", { class: "muted" }, "完全シークレット中です。絵は結果発表まで見えません。"));
     else if (!g.last) live.replaceChildren(h("p", { class: "muted" }, "最初の絵ができるのを待っています。"));
-    else live.replaceChildren(h("h3", {}, nameOf(g.last.author) + "さんが完成させた絵"), viewCanvas(g.last.strokes), h("p", { class: "muted" }, "何の絵か、考えながら待ちましょう。"));
+    else live.replaceChildren(h("h3", {}, "これまでの絵"), logStrip(g), h("p", { class: "muted" }, "赤く光っているのが最新です。何の絵か、考えながら待ちましょう。"));
+  }
+
+  /* ---------- album (this browser only, IndexedDB) ---------- */
+  var dbp = null;
+  function adb() {
+    return dbp || (dbp = new Promise(function (res, rej) {
+      if (!window.indexedDB) { rej(new Error("no idb")); return; }
+      var q = indexedDB.open("eshiri-album", 1);
+      q.onupgradeneeded = function () { q.result.createObjectStore("pics", { keyPath: "id" }); };
+      q.onsuccess = function () { res(q.result); };
+      q.onerror = function () { rej(q.error); };
+    }));
+  }
+  function tx(mode, fn) {
+    return adb().then(function (db) {
+      return new Promise(function (res, rej) {
+        var t = db.transaction("pics", mode), r = fn(t.objectStore("pics"));
+        t.oncomplete = function () { res(r && r.result); };
+        t.onerror = t.onabort = function () { rej(t.error); };
+      });
+    });
+  }
+  function albumAll() { return tx("readonly", function (st) { return st.getAll(); }); }
+  function albumDel(id) { return tx("readwrite", function (st) { st.delete(id); }); }
+  function saveAlbum(g) {
+    var gid = S.room.startedAt + "-" + S.code, recs = [], i, e, nx, names;
+    if (S.savedGid === gid) return;
+    S.savedGid = gid;
+    names = S.players.map(function (p) { return p.name; });
+    for (i = 0; i < g.n; i++) {
+      e = S.entries.get(String(i)); nx = S.entries.get(String(i + 1));
+      recs.push({ id: gid + "-" + i, gid: gid, i: i, ts: S.room.startedAt, room: S.code, author: nameOf(e.author), word: e.word,
+        answer: nx ? nx.guess : null, answerer: nx ? nameOf(nx.author) : null, players: names, strokes: e.strokes });
+    }
+    adb().then(function () { return tx("readwrite", function (st) { recs.forEach(function (r) { st.put(r); }); }); })
+      .then(function () { toast("この回の絵をアルバムに保存しました"); }, function () {});
+  }
+  function pad(n) { return n < 10 ? "0" + n : "" + n; }
+  function fmtDate(ts) { var d = new Date(ts); return d.getFullYear() + "年" + (d.getMonth() + 1) + "月" + d.getDate() + "日 " + pad(d.getHours()) + ":" + pad(d.getMinutes()); }
+  function vAlbum() {
+    var box = h("div", { class: "col", style: "gap:22px" }, h("p", { class: "muted" }, "読み込み中…"));
+    function load() {
+      albumAll().then(function (list) { fillAlbum(box, list, load); }, function () { box.replaceChildren(h("p", { class: "muted" }, "このブラウザではアルバムを使えません。")); });
+    }
+    load();
+    return shell(
+      h("div", { class: "step" }, h("h2", {}, "アルバム"), h("button", { onclick: function () { S.album = false; render(); } }, "ホームに戻る")),
+      h("p", { class: "muted" }, "このブラウザで遊んだときの絵が、結果発表のあとに自動で入ります。ブラウザのデータを消すと、アルバムも消えます。"),
+      box);
+  }
+  function fillAlbum(box, list, reload) {
+    if (!list.length) { box.replaceChildren(h("p", { class: "muted" }, "まだ絵がありません。遊ぶと、結果発表のあとにここへ入ります。")); return; }
+    var groups = {};
+    list.forEach(function (r) { (groups[r.gid] = groups[r.gid] || []).push(r); });
+    var gids = Object.keys(groups).sort(function (a, b) { return groups[b][0].ts - groups[a][0].ts; });
+    box.replaceChildren.apply(box, gids.map(function (gid) {
+      var rs = groups[gid].sort(function (a, b) { return a.i - b.i; });
+      return h("section", { class: "col", style: "gap:8px" },
+        h("h3", {}, fmtDate(rs[0].ts)), h("p", { class: "muted" }, "参加: " + rs[0].players.join("、")),
+        h("div", { class: "grid" }, rs.map(function (r) {
+          return h("button", { class: "thumb", onclick: function () { openPic(r, reload); } }, viewCanvas(r.strokes), h("span", {}, r.word));
+        })));
+    }));
+  }
+  function openPic(r, reload) {
+    var armed = false, ov;
+    function close() { ov.remove(); document.removeEventListener("keydown", onKey); }
+    function onKey(e) { if (e.key === "Escape") close(); }
+    var del = h("button", { class: "ghost", onclick: function () {
+      if (!armed) { armed = true; del.textContent = "本当に削除する?"; return; }
+      albumDel(r.id).then(function () { close(); reload(); }, function () { toast("削除できませんでした"); });
+    } }, "この絵を削除");
+    ov = h("div", { class: "ov", role: "dialog", "aria-modal": "true", onclick: function (e) { if (e.target === ov) close(); } },
+      h("div", { class: "card" },
+        viewCanvas(r.strokes),
+        h("dl", { class: "info" },
+          h("dt", {}, "日付"), h("dd", {}, fmtDate(r.ts)),
+          h("dt", {}, "描いた人"), h("dd", {}, r.author),
+          h("dt", {}, "お題"), h("dd", {}, "「" + r.word + "」"),
+          r.answer ? [h("dt", {}, "次の人の答え"), h("dd", {}, "「" + r.answer + "」 (" + r.answerer + ") ", same(r.answer, r.word) ? h("span", { class: "ok" }, "✓ 正解") : h("span", { class: "ng" }, "✗"))] : null,
+          h("dt", {}, "参加者"), h("dd", {}, r.players.join("、")),
+          h("dt", {}, "部屋"), h("dd", {}, r.room)),
+        h("div", { class: "row" }, h("button", { class: "primary", onclick: close }, "閉じる"), del)));
+    document.addEventListener("keydown", onKey);
+    document.body.append(ov);
   }
 
   function vReveal() {
     var g = derive(), steps = [], i, hit = 0;
+    saveAlbum(g);
     for (i = 0; i < g.n; i++) steps.push(S.entries.get(String(i)));
-    for (i = 1; i < steps.length; i++) if (norm(steps[i].guess) === norm(steps[i - 1].word)) hit++;
+    for (i = 1; i < steps.length; i++) if (same(steps[i].guess, steps[i - 1].word)) hit++;
     var banner = g.nEnd ? nameOf(g.last.author) + "さんが「" + g.last.word + "」で「ん」! ゲームセット"
       : g.n >= g.total ? g.n + "枚、最後までつながりました" : "途中で終了しました(" + g.n + "枚)";
+    /* しりとりの流れ: 次の人の答えが違っていたら、その答えを❌で出して正解を添える */
     var chain = h("div", { class: "chain" }, steps.map(function (e, k) {
-      var wrong = k > 0 && norm(e.guess) !== norm(steps[k - 1].word);
-      return [k ? h("i", {}, "→") : null, h("span", {}, e.word), wrong ? h("s", {}, "(" + e.guess + "と答えた)") : null];
+      var nx = steps[k + 1], wrong = nx && !same(nx.guess, e.word);
+      return [k ? h("i", {}, "↓") : null,
+        wrong ? h("span", { class: "ng" }, "❌" + nx.guess, h("small", {}, "(正解: " + e.word + ")")) : h("span", {}, e.word)];
     }));
     var minis = steps.map(function (e) { return h("div", { class: "mini" }, viewCanvas(e.strokes), h("b", {}, e.word), h("span", { class: "muted" }, nameOf(e.author))); });
     var cards = steps.map(function (e, k) {
-      var prev = k > 0 ? steps[k - 1] : null, same = prev && norm(e.guess) === norm(prev.word);
+      var prev = k > 0 ? steps[k - 1] : null, ok = prev && same(e.guess, prev.word);
       return h("div", { class: "sc" },
         h("div", { class: "who" }, h("b", {}, (k + 1) + "枚目"), nameOf(e.author)),
-        prev ? h("div", { class: "g" }, "前の絵への答え「" + e.guess + "」 ", same ? h("span", { class: "ok" }, "✓ 正解") : h("span", { class: "ng" }, "✗ 正解は「" + prev.word + "」")) : null,
+        prev ? h("div", { class: "g" }, "前の絵への答え「" + e.guess + "」 ", ok ? h("span", { class: "ok" }, "✓ 正解") : h("span", { class: "ng" }, "✗ 正解は「" + prev.word + "」")) : null,
         viewCanvas(e.strokes), h("div", { class: "w" }, "「" + e.word + "」"));
     });
     var replayBtn = h("button", { onclick: function () {
