@@ -106,6 +106,7 @@ canvas.view { cursor: default; }
 .bar i { display: block; height: 100%; background: var(--ok); transition: width .3s; }
 .strip { display: flex; gap: 22px; overflow-x: auto; padding: 18px 18px 16px; margin: -14px -14px -4px; align-items: stretch; }
 .mini { flex: 0 0 150px; width: 150px; display: flex; flex-direction: column; gap: 4px; position: relative; font-size: 12px; }
+.mini.big { flex-basis: min(240px, 68vw); width: min(240px, 68vw); }
 .mini + .mini::before { content: "→"; position: absolute; left: -19px; top: 30%; color: var(--muted); font-size: 16px; }
 .mini canvas { width: 100%; aspect-ratio: 10/7; height: auto; border: 1.5px solid var(--line); border-radius: 8px; background: var(--paper); display: block; }
 .mini b { font-size: 14px; }
@@ -302,10 +303,11 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; }
   function derive() {
     var order = S.room.order || [], N = order.length, set = S.room.settings || DEFAULTS, n = S.entries.size;
     var last = n ? S.entries.get(String(n - 1)) : null, total = set.laps ? N * set.laps : Infinity;
-    var nEnd = !!(last && endsN(last.word));
+    var nEnd = !!(last && endsN(last.word)), cur = order[n % N];
+    var leftEnd = (S.room.left || []).indexOf(cur) >= 0; /* 順番が来た人が退出していたら、そこで終了 */
     return {
-      order: order, N: N, idx: order.indexOf(S.pid), n: n, total: total, turn: n, cur: order[n % N], last: last, nEnd: nEnd, set: set,
-      finished: !!S.room.ended || n >= total || nEnd
+      order: order, N: N, idx: order.indexOf(S.pid), n: n, total: total, turn: n, cur: cur, last: last, nEnd: nEnd, set: set, leftEnd: leftEnd,
+      finished: !!S.room.ended || n >= total || nEnd || leftEnd
     };
   }
   function orderStrip(g) {
@@ -319,7 +321,21 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; }
   function header() {
     return h("header", { class: "top" },
       h("div", { class: "logo" }, h("span", {}, "絵"), "しりとり"),
-      S.code ? h("div", { class: "chip" }, "部屋 ", h("b", {}, S.code)) : null);
+      h("div", { class: "row" }, S.code ? h("div", { class: "chip" }, "部屋 ", h("b", {}, S.code)) : null, leaveBtn()));
+  }
+  function leaveBtn() {
+    if (!S.code || !S.room) return null;
+    var armed = false, b = h("button", { class: "ghost", style: "padding:5px 12px;font-size:13px" }, "退出");
+    b.addEventListener("click", function () {
+      var risky = S.room.phase === "play" && !derive().finished;
+      if (risky && !armed) {
+        armed = true; b.textContent = S.isHost ? "部屋が終わります。本当に?" : "本当に退出?";
+        setTimeout(function () { armed = false; b.textContent = "退出"; }, 4000);
+        return;
+      }
+      backHome();
+    });
+    return b;
   }
   function shell() { return h("div", { class: "wrap" }, header(), h("main", {}, Array.prototype.slice.call(arguments))); }
   function view() {
@@ -444,7 +460,9 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; }
       } }, "決定");
       drawBox.append(startMsg, h("div", {}, h("label", { for: "word" }, "描く言葉(ひらがな)"), wordIn), ed.el, go);
       body = [
-        h("div", { class: "card" }, h("h3", {}, "前の人が描いた絵"), viewCanvas(prev ? prev.strokes : [])),
+        S.room.settings && S.room.settings.vis === "secret"
+          ? h("div", { class: "card" }, h("h3", {}, "前の人が描いた絵"), viewCanvas(prev ? prev.strokes : []))
+          : h("div", { class: "card" }, h("h3", {}, "これまでの絵"), logStrip(g), h("p", { class: "muted" }, "赤く光っているのが、前の人が描いた最新の絵です。")),
         h("div", { class: "card" },
           hintFor(S.entries, t) ? h("p", { class: "quote" }, "ヒント: この絵は「" + hintFor(S.entries, t) + "」から始まる言葉です") : null,
           h("div", {}, h("label", { for: "guess" }, "この絵は何? ひらがなで答えてください"), guessIn), h("div", {}, gbtn)),
@@ -467,7 +485,7 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; }
     var list = [], i;
     for (i = 0; i < g.n; i++) list.push(S.entries.get(String(i)));
     var strip = h("div", { class: "strip", "aria-label": "これまでの絵" }, list.map(function (e, k) {
-      return h("div", { class: "mini" + (k === list.length - 1 ? " new" : "") }, viewCanvas(e.strokes), h("b", {}, (k + 1) + "枚目"), h("span", { class: "muted" }, nameOf(e.author)));
+      return h("div", { class: "mini big" + (k === list.length - 1 ? " new" : "") }, viewCanvas(e.strokes), h("b", {}, (k + 1) + "枚目"), h("span", { class: "muted" }, nameOf(e.author)));
     }));
     requestAnimationFrame(function () { strip.scrollLeft = strip.scrollWidth; });
     return strip;
@@ -585,7 +603,8 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; }
     for (i = 0; i < g.n; i++) steps.push(S.entries.get(String(i)));
     for (i = 1; i < steps.length; i++) if (same(steps[i].guess, steps[i - 1].word)) hit++;
     var banner = g.nEnd ? nameOf(g.last.author) + "さんが「" + g.last.word + "」で「ん」! ゲームセット"
-      : g.n >= g.total ? g.n + "枚、最後までつながりました" : "途中で終了しました(" + g.n + "枚)";
+      : g.n >= g.total ? g.n + "枚、最後までつながりました"
+      : (!S.room.ended && g.leftEnd) ? nameOf(g.cur) + "さんが退出したので終了しました(" + g.n + "枚)" : "途中で終了しました(" + g.n + "枚)";
     /* しりとりの流れ: 次の人の答えが違っていたら、その答えを❌で出して正解を添える */
     var chain = h("div", { class: "chain" }, steps.map(function (e, k) {
       var nx = steps[k + 1], wrong = nx && !same(nx.guess, e.word);
@@ -635,7 +654,7 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; }
   }
   function backHome() {
     var code = S.code; S.code = null;
-    if (hostConn && hostConn.open && S.room && S.room.phase === "lobby") { try { hostConn.send({ t: "leave" }); } catch (e) {} }
+    if (hostConn && hostConn.open && S.room) { try { hostConn.send({ t: "leave" }); } catch (e) {} }
     resetNet(); ls("room", null); ls("role", null); if (code) ls("host." + code, null);
     setHash(""); render();
   }
@@ -654,6 +673,9 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; }
       }
     } else if (m.t === "leave") {
       if (S.room.phase === "lobby") { S.players = S.players.filter(function (p) { return p.id !== pid; }); bcast({ t: "players", players: S.players }); }
+      else if (S.room.phase === "play" && (S.room.order || []).indexOf(pid) >= 0 && (S.room.left || []).indexOf(pid) < 0) {
+        S.room = Object.assign({}, S.room, { left: (S.room.left || []).concat(pid) }); bcast({ t: "room", room: S.room });
+      }
     } else if (m.t === "entry") {
       if (S.room.phase !== "play") return { err: "ゲーム中ではありません" };
       d = derive();
