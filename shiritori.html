@@ -26,6 +26,7 @@
   --accent: #7c9bff; --accent-ink: #0c1024; --ok: #46c88a; --bad: #ff7a73; --glow: rgba(255, 122, 115, .6); color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body {
   margin: 0; background: var(--bg); color: var(--ink);
   font-family: var(--body); font-size: 16px; line-height: 1.7;
@@ -107,6 +108,9 @@ canvas.view { cursor: default; }
 .strip { display: flex; gap: 22px; overflow-x: auto; padding: 18px 18px 16px; margin: -14px -14px -4px; align-items: stretch; }
 .mini { flex: 0 0 150px; width: 150px; display: flex; flex-direction: column; gap: 4px; position: relative; font-size: 12px; }
 .mini.big { flex-basis: min(240px, 68vw); width: min(240px, 68vw); }
+.mini.sm { flex-basis: 112px; width: 112px; gap: 2px; }
+.mini.sm b, .mini.sm span { font-size: 12px; line-height: 1.4; }
+canvas.paper:not(.view) { width: min(100%, calc(44vh * 10 / 7)); margin-inline: auto; }
 .mini + .mini::before { content: "→"; position: absolute; left: -19px; top: 30%; color: var(--muted); font-size: 16px; }
 .mini canvas { width: 100%; aspect-ratio: 10/7; height: auto; border: 1.5px solid var(--line); border-radius: 8px; background: var(--paper); display: block; }
 .mini b { font-size: 14px; }
@@ -189,7 +193,7 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; }
   function inviteUrl() { return location.href.split("#")[0] + "#room-" + S.code; }
 
   /* ---------- kana / rules ---------- */
-  function norm(s) { return String(s || "").replace(/\s+/g, "").replace(/[ァ-ヶ]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0x60); }); }
+  function norm(s) { return String(s || "").normalize("NFKC").replace(/\s+/g, "").replace(/[ァ-ヶ]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0x60); }); }
   function isKana(s) { return /^[ぁ-ゖー]+$/.test(s) && s.charAt(0) !== "ー"; }
   function lastKana(s) { s = s.replace(/ー+$/, ""); var c = s.slice(-1); return SMALL[c] || c; }
   function firstKana(s) { var c = s.charAt(0); return SMALL[c] || c; }
@@ -287,11 +291,12 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; }
       penBtn.classList.toggle("on", tool === "pen"); erBtn.classList.toggle("on", tool === "eraser");
     }
     sync();
-    var el = h("div", { class: "card", style: "padding:14px" }, cv,
+    var el = h("div", { class: "card", style: "padding:14px;gap:10px" },
       h("div", { class: "tools" }, swatches, h("span", { style: "width:6px" }), sizes),
       h("div", { class: "tools" }, penBtn, erBtn,
         h("button", { class: "t", onclick: function () { strokes.pop(); redraw(); } }, "ひとつ戻す"),
-        h("button", { class: "t", onclick: function () { strokes.length = 0; redraw(); } }, "全部消す")));
+        h("button", { class: "t", onclick: function () { strokes.length = 0; redraw(); } }, "全部消す")),
+      cv);
     return { el: el, strokes: strokes };
   }
 
@@ -436,30 +441,35 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; }
   function vCompose(g) {
     var t = g.turn, prev = t > 0 ? S.entries.get(String(t - 1)) : null, ed = makeEditor(), warned = false;
     var go = h("button", { class: "primary" }, "完成!");
-    var wordIn = h("input", { id: "word", maxlength: "20", placeholder: "ひらがなで" });
-    var guessIn = h("input", { id: "guess", maxlength: "20", placeholder: "例: りんご" });
-    var startMsg = h("p", { class: "quote" });
-    var drawBox = h("div", { class: "col", hidden: true });
+    var wordIn = kanaInput({ id: "word", placeholder: "ひらがなで" });
+    var guessIn = kanaInput({ id: "guess", placeholder: "例: りんご" });
+    var drawBox = h("div", { class: "col", hidden: true, style: "gap:10px" });
     var body;
     if (t === 0) {
       drawBox.append(h("p", { class: "muted" }, "このお題を絵に描いて、完成を押してください。お題は他の人には見えません。"), ed.el, go);
       body = [slot(S.room.topic, function () { drawBox.hidden = false; }), drawBox];
     } else {
+      var secret = S.room.settings && S.room.settings.vis === "secret";
+      var wordLabel = h("label", { for: "word" }, "描く言葉(ひらがな)");
+      var viewBox = h("div", { class: "col", style: "gap:10px" },
+        secret
+          ? [h("h3", {}, "前の人が描いた絵"), h("div", { style: "max-width:200px" }, viewCanvas(prev ? prev.strokes : []))]
+          : [h("div", { class: "step" }, h("h3", {}, "これまでの絵"), h("span", { class: "muted" }, "赤く光るのが最新")), logStrip(g, true)]);
       var gbtn = h("button", { onclick: function () {
         var gs = norm(guessIn.value);
         if (!isKana(gs)) { toast("答えはひらがなで入れてください"); return; }
         if (lastKana(gs) === "ん") { toast("「ん」で終わる答えは使えません。別の答えを考えてください"); return; }
-        startMsg.textContent = "「" + lastKana(gs) + "」から始まる言葉を描こう";
-        wordIn.placeholder = lastKana(gs) + "…"; drawBox.hidden = false; wordIn.focus();
+        ansText.textContent = "「" + gs + "」";
+        wordLabel.textContent = "「" + lastKana(gs) + "」から始まる言葉を描こう"; wordLabel.style.color = "var(--ink)";
+        wordIn.placeholder = lastKana(gs) + "…";
+        viewBox.hidden = true; guessRow.hidden = true; ansRow.hidden = false; drawBox.hidden = false; wordIn.focus();
       } }, "決定");
-      drawBox.append(startMsg, h("div", {}, h("label", { for: "word" }, "描く言葉(ひらがな)"), wordIn), ed.el, go);
-      body = [
-        S.room.settings && S.room.settings.vis === "secret"
-          ? h("div", { class: "card" }, h("h3", {}, "前の人が描いた絵"), viewCanvas(prev ? prev.strokes : []))
-          : h("div", { class: "card" }, h("h3", {}, "これまでの絵"), logStrip(g), h("p", { class: "muted" }, "赤く光っているのが、前の人が描いた最新の絵です。")),
-        h("div", { class: "card" },
-          h("div", {}, h("label", { for: "guess" }, "この絵は何? ひらがなで答えてください"), guessIn), h("div", {}, gbtn)),
-        drawBox];
+      var guessRow = h("div", { class: "col", style: "gap:8px" }, h("div", {}, h("label", { for: "guess" }, "この絵は何? (ひらがなで)"), guessIn.box), h("div", {}, gbtn));
+      var ansText = h("b", {});
+      var ansRow = h("div", { class: "row", hidden: true }, h("span", { class: "muted" }, "あなたの答え:"), ansText,
+        h("button", { class: "ghost", style: "padding:4px 10px;font-size:13px", onclick: function () { viewBox.hidden = false; guessRow.hidden = false; ansRow.hidden = true; guessIn.focus(); } }, "変える"));
+      drawBox.append(h("div", {}, wordLabel, wordIn.box), ed.el, go);
+      body = [h("div", { class: "card", style: "gap:10px;padding:14px" }, viewBox, guessRow, ansRow), drawBox];
     }
     go.addEventListener("click", function () {
       var ent = { word: t === 0 ? S.room.topic : wordIn.value, strokes: ed.strokes.length ? packStrokes(ed.strokes) : [] };
@@ -474,11 +484,26 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; }
       S.isHost && t > 0 ? h("div", {}, h("button", { class: "ghost", onclick: endNow }, "ここで終了して結果を見る")) : null);
   }
   function countText(g) { return g.total === Infinity ? (g.turn + 1) + "枚目" : (g.turn + 1) + " / " + g.total + " 枚目"; }
-  function logStrip(g) {
+  /* ひらがな入力: カタカナ・半角カナは自動でひらがなに直す。漢字は直せないので注意を出す */
+  function kanaInput(attrs) {
+    var inp = h("input", Object.assign({ maxlength: "20", lang: "ja", autocomplete: "off", autocapitalize: "off", autocorrect: "off", spellcheck: "false" }, attrs));
+    var note = h("p", { class: "muted", hidden: true, style: "color:var(--bad)" }, "漢字が入っています。ひらがなに直してください");
+    function fix() {
+      var v = inp.value, n = v.normalize("NFKC").replace(/[ァ-ヶ]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0x60); }).replace(/\s+/g, "");
+      if (n !== v) inp.value = n;
+      note.hidden = !/[一-鿿]/.test(inp.value);
+    }
+    inp.addEventListener("input", function (e) { if (!e.isComposing) fix(); });
+    inp.addEventListener("compositionend", fix);
+    inp.addEventListener("blur", fix);
+    Object.defineProperty(inp, "box", { value: h("div", { class: "col", style: "gap:4px" }, inp, note) });
+    return inp;
+  }
+  function logStrip(g, small) {
     var list = [], i;
     for (i = 0; i < g.n; i++) list.push(S.entries.get(String(i)));
     var strip = h("div", { class: "strip", "aria-label": "これまでの絵" }, list.map(function (e, k) {
-      return h("div", { class: "mini big" + (k === list.length - 1 ? " new" : "") }, viewCanvas(e.strokes), h("b", {}, (k + 1) + "枚目"), h("span", { class: "muted" }, nameOf(e.author)));
+      return h("div", { class: "mini " + (small ? "sm" : "big") + (k === list.length - 1 ? " new" : "") }, viewCanvas(e.strokes), h("b", {}, (k + 1) + "枚目"), h("span", { class: "muted" }, nameOf(e.author)));
     }));
     requestAnimationFrame(function () { strip.scrollLeft = strip.scrollWidth; });
     return strip;
