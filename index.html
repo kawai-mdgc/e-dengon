@@ -1,5 +1,10 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>お絵描き伝言ゲーム</title>
-<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="color-scheme" content="light dark">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Maru+Gothic:wght@400;500;700&display=swap">
 <style>
 /* Layout: one centered column, a single task per screen (home, lobby, write/draw, wait, reveal). Paper-and-marker look. */
@@ -119,11 +124,14 @@ canvas.view { cursor: default; }
 .sc, .mini { transition: opacity .5s, transform .5s; }
 #toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 18px; border-radius: 10px; font-size: 14px; font-weight: 700; max-width: min(92vw, 460px); z-index: 20; }
 @media (prefers-reduced-motion: reduce) { .sc, .mini, .bar i, button { transition: none; } }
+body { margin: 0; }
 </style>
-
+</head>
+<body>
 <div id="app"><div class="wrap"><p class="muted">読み込み中…</p></div></div>
 <div id="toast" role="status" hidden></div>
 
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
 (function () {
   "use strict";
@@ -133,7 +141,7 @@ canvas.view { cursor: default; }
     "サングラスをかけた富士山", "お風呂に入るロボット", "忍者の引っ越し", "バナナ vs パイナップル", "雲の上の運動会", "歯医者に行くドラゴン",
     "海の底のコンビニ", "遅刻しそうなサンタ", "カレーを作る宇宙人", "傘をさすカメ", "ギターを弾くタコ", "魔法使いの朝ごはん",
     "電車で居眠りするクマ", "月面キャンプ", "迷子のUFO", "スイカ割りに挑むカニ", "ピアノを弾く雪だるま", "夕焼けを見つめるキリン"];
-  var S = { db: null, pid: null, name: "", code: null, room: null, roomReady: false, players: [], entries: new Map(), unsubs: [], busy: false, revChain: null };
+  var S = { isHost: false, pid: null, name: "", code: null, room: null, roomReady: false, players: [], entries: new Map(), unsubs: [], busy: false, revChain: null };
   var lastKey = null, tTimer = null, replayToken = 0;
 
   /* ---------- helpers ---------- */
@@ -277,8 +285,6 @@ canvas.view { cursor: default; }
     return h("div", { class: "wrap" }, header(), h("main", {}, kids));
   }
   function view() {
-    if (!S.booted) return { key: "boot", build: function () { return shell(h("p", { class: "muted" }, "読み込み中…")); } };
-    if (!S.db) return { key: "nodb", build: function () { return shell(h("div", { class: "card" }, h("h2", {}, "このページでは遊べません"), h("p", { class: "muted" }, "みんなで遊ぶために共有データベースを使います。Claudeにログインして、書き込み権限(コントリビューター以上)のある状態で開き直してください。"))); } };
     if (!S.code) return { key: "home", build: vHome };
     if (!S.roomReady) return { key: "loading", build: function () { return shell(h("p", { class: "muted" }, "部屋に接続中…")); } };
     if (!S.room) return { key: "gone", build: function () { return shell(h("div", { class: "card" }, h("h2", {}, "部屋が見つかりません"), h("button", { class: "primary", onclick: leave }, "ホームに戻る"))); } };
@@ -381,14 +387,6 @@ canvas.view { cursor: default; }
     } }, "できた");
     return shell(head, body, h("div", {}, btn));
   }
-  function submit(g, payload) {
-    var r = g.pending.r, chain = g.pending.chain;
-    var doc = Object.assign({ chain: chain, round: r, author: S.pid, type: r % 2 === 1 ? "draw" : "text" }, payload);
-    return S.db.doc(rpath("entries/" + chain + "-" + r)).set(doc).then(function () { return true; }, function (e) {
-      toast(e && e.code === "quota_exceeded" ? "データの上限に達しました" : "送信できませんでした。もう一度押してください"); return false;
-    });
-  }
-
   function vWait() {
     return shell(
       h("div", { class: "card" }, h("h2", { id: "wtitle" }), h("p", { class: "muted", id: "wsub" }), h("div", { class: "prog", id: "prog" })),
@@ -455,96 +453,172 @@ canvas.view { cursor: default; }
   }
 
   /* ---------- actions ---------- */
+  var PREFIX = "edengon-v1-";
+  var peer = null, hostConn = null, conns = {};
+
   function copy(t) {
     try { navigator.clipboard.writeText(t).then(function () { toast("コピーしました"); }, function () { toast("コード: " + t); }); }
     catch (e) { toast("コード: " + t); }
   }
-  function enter(code) {
-    S.code = code; S.room = null; S.roomReady = false; S.players = []; S.entries = new Map(); S.revChain = null;
-    ls("room", code);
-    try { location.hash = "room-" + code; } catch (e) {}
-    var fail = function (e) { toast(e && e.code === "revoked" ? "アクセス権が変わりました" : "接続でエラーが起きました"); };
-    S.unsubs.push(S.db.doc(rpath()).onSnapshot(function (s) { S.room = s.exists ? s.data() : null; S.roomReady = true; render(); }, fail));
-    S.unsubs.push(S.db.collection(rpath("players")).onSnapshot(function (q) {
-      S.players = q.docs.map(function (d) { var v = d.data(); return { id: d.id, name: v.name, joinedAt: v.joinedAt || 0 }; })
-        .sort(function (a, b) { return a.joinedAt - b.joinedAt || (a.id < b.id ? -1 : 1); });
-      render();
-    }, fail));
-    S.unsubs.push(S.db.collection(rpath("entries")).onSnapshot(function (q) {
-      var m = new Map(); q.docs.forEach(function (d) { m.set(d.id, d.data()); }); S.entries = m; render();
-    }, fail));
-    setTimeout(function () { if (S.code === code && !S.roomReady) toast("接続に時間がかかっています。ネットワークを確認してください"); }, 10000);
-    render();
+  function setHash(code) { try { location.hash = code ? "room-" + code : ""; } catch (e) {} }
+  function resetNet() {
+    try { if (peer) peer.destroy(); } catch (e) {}
+    peer = null; hostConn = null; conns = {};
+    S.isHost = false; S.room = null; S.roomReady = false; S.players = []; S.entries = new Map(); S.revChain = null;
+  }
+  function backHome() {
+    var code = S.code; S.code = null;
+    resetNet(); ls("room", null); ls("role", null); if (code) ls("host." + code, null);
+    setHash(""); render();
+  }
+  function bcast(m) { Object.keys(conns).forEach(function (k) { try { conns[k].conn.send(m); } catch (e) {} }); }
+  function saveHost() {
+    if (!S.isHost) return;
+    ls("host." + S.code, JSON.stringify({ room: S.room, players: S.players, entries: Array.from(S.entries) }));
+  }
+  function addEntry(key, e) { S.entries.set(key, e); bcast({ t: "entry", key: key, entry: e }); }
+
+  /* host: all game state lives in the host's browser */
+  function hostApply(m, pid) {
+    var ex, mt;
+    if (m.t === "join") {
+      ex = S.players.some(function (p) { return p.id === pid; });
+      if (!ex) {
+        if (S.room.phase !== "lobby") return { err: "その部屋はもう始まっています" };
+        if (S.players.length >= 10) return { err: "その部屋は満員です(10人まで)" };
+        S.players.push({ id: pid, name: String(m.name || "名無し").slice(0, 12), joinedAt: Date.now() });
+        bcast({ t: "players", players: S.players });
+      }
+    } else if (m.t === "leave") {
+      if (S.room.phase === "lobby") { S.players = S.players.filter(function (p) { return p.id !== pid; }); bcast({ t: "players", players: S.players }); }
+    } else if (m.t === "entry") {
+      mt = /^(\d+)-(\d+)$/.exec(String(m.key));
+      var order = S.room.order || [], N = order.length;
+      if (!mt || !m.entry || S.room.phase !== "play" || S.entries.has(m.key)) return;
+      if (+mt[1] >= N || +mt[2] >= N || order[(+mt[1] + +mt[2]) % N] !== pid) return;
+      var d = { chain: +mt[1], round: +mt[2], author: pid, type: +mt[2] % 2 === 1 ? "draw" : "text" };
+      if (d.type === "draw") { d.strokes = Array.isArray(m.entry.strokes) ? m.entry.strokes : []; if (JSON.stringify(d.strokes).length > 260000) return; }
+      else d.text = String(m.entry.text || "").slice(0, 60);
+      addEntry(m.key, d);
+    }
+    saveHost(); render();
+    return {};
+  }
+  function onHostConnection(conn) {
+    conn.on("data", function (m) {
+      if (!m || typeof m !== "object") return;
+      if (m.t === "join") {
+        var pid = cleanId(m.pid || ""), r = pid ? hostApply(m, pid) : { err: "参加できませんでした" };
+        if (r && r.err) { conn.send({ t: "err", msg: r.err }); return; }
+        conns[conn.peer] = { conn: conn, pid: pid };
+        conn.send({ t: "state", room: S.room, players: S.players, entries: Array.from(S.entries) });
+        return;
+      }
+      var c = conns[conn.peer]; if (c) hostApply(m, c.pid);
+    });
+    conn.on("close", function () { delete conns[conn.peer]; });
+  }
+  function startHost(code, restore, tries) {
+    var p = new Peer(PREFIX + code); peer = p;
+    p.on("open", function () {
+      S.isHost = true; S.code = code;
+      if (restore) { S.room = restore.room; S.players = restore.players; S.entries = new Map(restore.entries); }
+      else { S.room = { host: S.pid, phase: "lobby", createdAt: Date.now() }; S.players = [{ id: S.pid, name: S.name, joinedAt: Date.now() }]; S.entries = new Map(); }
+      S.roomReady = true; ls("room", code); ls("role", "host"); setHash(code); saveHost(); render();
+    });
+    p.on("connection", onHostConnection);
+    p.on("error", function (e) {
+      if (e.type === "unavailable-id") {
+        try { p.destroy(); } catch (x) {}
+        if (!restore && (tries || 0) < 6) { startHost(genCode(), null, (tries || 0) + 1); return; }
+        toast(restore ? "部屋を復元できませんでした。少し待ってからもう一度開いてください" : "部屋をつくれませんでした"); if (restore) backHome();
+        return;
+      }
+      if (e.type === "disconnected" || e.type === "network") return;
+      toast("接続でエラーが起きました(" + e.type + ")");
+    });
+  }
+  function createRoom() { resetNet(); startHost(genCode(), null, 0); }
+
+  /* client */
+  function joinRoom(code, silent) {
+    if (!/^[A-Z]{4}$/.test(code)) { toast("部屋コードは英字4文字です"); return; }
+    resetNet();
+    var p = new Peer(); peer = p;
+    var opened = false, entered = false;
+    function fail(msg) { if (!silent) toast(msg); if (!entered) { resetNet(); if (silent) { ls("room", null); ls("role", null); } render(); } }
+    p.on("open", function () {
+      var conn = p.connect(PREFIX + code, { reliable: true }); hostConn = conn;
+      conn.on("open", function () { opened = true; conn.send({ t: "join", pid: S.pid, name: S.name }); });
+      conn.on("data", function (m) {
+        if (!m || typeof m !== "object") return;
+        if (m.t === "err") { fail(m.msg); return; }
+        if (m.t === "state") {
+          entered = true; S.code = code; S.isHost = false;
+          S.room = m.room; S.players = m.players; S.entries = new Map(m.entries); S.roomReady = true;
+          ls("room", code); ls("role", "client"); setHash(code);
+        } else if (m.t === "room") S.room = m.room;
+        else if (m.t === "players") S.players = m.players;
+        else if (m.t === "entry") S.entries.set(m.key, m.entry);
+        render();
+      });
+      conn.on("close", function () {
+        if (!entered || S.code !== code) return;
+        var fin = S.room && S.room.phase === "play" && derive().finished;
+        if (fin) { toast("ホストが退出しました。結果はこのまま見られます"); return; }
+        toast("ホストとの接続が切れました"); backHome();
+      });
+    });
+    p.on("error", function (e) { fail(e.type === "peer-unavailable" ? "その部屋は見つかりません" : "接続でエラーが起きました(" + e.type + ")"); });
+    setTimeout(function () { if (!opened && !entered) fail("その部屋は見つかりません"); }, 9000);
   }
   function leave() {
-    var wasLobby = S.room && S.room.phase === "lobby", code = S.code;
-    S.unsubs.forEach(function (u) { u(); }); S.unsubs = [];
-    if (wasLobby && code) S.db.doc("rooms/" + code + "/players/" + S.pid).delete().catch(function () {});
-    S.code = null; S.room = null; S.roomReady = false; ls("room", null);
-    try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
-    render();
-  }
-  function joinPlayer(code) { return S.db.doc("rooms/" + code + "/players/" + S.pid).set({ name: S.name, joinedAt: Date.now() }); }
-  function createRoom() {
-    (function attempt(n) {
-      var c = genCode();
-      S.db.doc("rooms/" + c).get().then(function (s) {
-        if (s.exists) { if (n < 5) return attempt(n + 1); throw new Error("busy"); }
-        return S.db.doc("rooms/" + c).set({ host: S.pid, phase: "lobby", createdAt: Date.now() })
-          .then(function () { return joinPlayer(c); }).then(function () { enter(c); });
-      }).catch(function () { toast("部屋をつくれませんでした。もう一度お試しください"); });
-    })(0);
-  }
-  function joinRoom(c) {
-    if (!/^[A-Z]{4}$/.test(c)) { toast("部屋コードは英字4文字です"); return; }
-    Promise.all([S.db.doc("rooms/" + c).get(), S.db.collection("rooms/" + c + "/players").get()]).then(function (res) {
-      var rs = res[0], ps = res[1], mine = ps.docs.some(function (d) { return d.id === S.pid; });
-      if (!rs.exists) { toast("その部屋は見つかりません"); return; }
-      if (rs.data().phase !== "lobby" && !mine) { toast("その部屋はもう始まっています"); return; }
-      if (ps.size >= 10 && !mine) { toast("その部屋は満員です(10人まで)"); return; }
-      return joinPlayer(c).then(function () { enter(c); });
-    }).catch(function () { toast("参加できませんでした"); });
+    var wasLobby = S.room && S.room.phase === "lobby";
+    if (!S.isHost && wasLobby && hostConn && hostConn.open) { try { hostConn.send({ t: "leave" }); } catch (e) {} }
+    backHome();
   }
   function startGame() {
-    if (S.players.length < 2) return;
-    S.busy = true;
-    S.db.doc(rpath()).update({ phase: "play", order: S.players.map(function (p) { return p.id; }), startedAt: Date.now() })
-      .catch(function () { toast("開始できませんでした"); }).then(function () { S.busy = false; });
+    if (!S.isHost || S.players.length < 2) return;
+    S.room = Object.assign({}, S.room, { phase: "play", order: S.players.map(function (p) { return p.id; }), startedAt: Date.now() });
+    bcast({ t: "room", room: S.room }); saveHost(); render();
+  }
+  function submit(g, payload) {
+    var r = g.pending.r, key = g.pending.chain + "-" + r;
+    if (S.isHost) hostApply({ t: "entry", key: key, entry: payload }, S.pid);
+    else if (hostConn && hostConn.open) hostConn.send({ t: "entry", key: key, entry: payload });
+    else { toast("ホストとつながっていません"); return Promise.resolve(false); }
+    return new Promise(function (res) { setTimeout(function () { res(false); }, 8000); });
   }
   function fillBlanks() {
-    var g = derive(), N = g.N, jobs = [], c, r;
+    var g = derive(), N = g.N, c, r, n = 0;
     for (r = 0; r < N; r++) for (c = 0; c < N; c++) {
       if (!S.entries.has(c + "-" + r) && (r === 0 || S.entries.has(c + "-" + (r - 1)))) {
         var d = { chain: c, round: r, author: g.order[(c + r) % N], type: r % 2 === 1 ? "draw" : "text", filled: true };
         if (d.type === "draw") d.strokes = []; else d.text = "(未提出)";
-        jobs.push(S.db.doc(rpath("entries/" + c + "-" + r)).set(d));
+        addEntry(c + "-" + r, d); n++;
       }
     }
-    if (!jobs.length) { toast("進めるところがありません"); return; }
-    Promise.all(jobs).then(function () { toast("空欄で進めました"); }, function () { toast("進められませんでした"); });
+    if (!n) { toast("進めるところがありません"); return; }
+    saveHost(); render(); toast("空欄で進めました");
   }
 
   /* ---------- boot ---------- */
   window.addEventListener("hashchange", function () { if (!S.code && lastKey === "home") { lastKey = null; render(); } });
   S.name = ls("name") || "";
+  S.pid = ls("pid");
+  if (!S.pid) { S.pid = cleanId(Math.random().toString(36).slice(2, 10) + Date.now().toString(36)); ls("pid", S.pid); }
   render();
-  (async function () {
-    try {
-      var c = window.claude;
-      var db = c && await c.use("db"), user = c && await c.use("user");
-      var id = user && await user.id();
-      if (!db || !id) { S.booted = true; render(); return; }
-      var can = user.can ? await user.can("data.write") : null;
-      if (can === false) { S.booted = true; render(); return; }
-      S.db = db; S.pid = cleanId(id); S.booted = true;
-      var saved = ls("room");
-      if (saved && /^[A-Z]{4}$/.test(saved)) {
-        var rs = await db.doc("rooms/" + saved).get(), ps = await db.doc("rooms/" + saved + "/players/" + S.pid).get();
-        if (rs.exists && ps.exists) { S.name = ps.data().name || S.name; enter(saved); return; }
-        ls("room", null);
-      }
-      lastKey = null; render();
-    } catch (e) { S.booted = true; render(); }
+  (function resume() {
+    var saved = ls("room"), role = ls("role");
+    if (!saved || !/^[A-Z]{4}$/.test(saved)) return;
+    if (role === "host") {
+      var raw = ls("host." + saved), st = null;
+      try { st = raw && JSON.parse(raw); } catch (e) {}
+      if (st && st.room) startHost(saved, st, 0); else { ls("room", null); ls("role", null); }
+    } else joinRoom(saved, true);
   })();
 })();
 </script>
+
+</body>
+</html>
