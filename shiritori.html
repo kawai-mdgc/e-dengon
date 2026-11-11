@@ -137,8 +137,6 @@ canvas.paper:not(.view) { width: min(100%, calc(44vh * 10 / 7)); margin-inline: 
 dl.info { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
 dl.info dt { color: var(--muted); font-size: 13px; font-weight: 700; }
 dl.info dd { margin: 0; overflow-wrap: anywhere; }
-.veiled { opacity: 0; transform: translateY(10px); }
-.sc, .mini { transition: opacity .5s, transform .5s; }
 #toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 18px; border-radius: 10px; font-size: 14px; font-weight: 700; max-width: min(92vw, 460px); z-index: 20; }
 @media (prefers-reduced-motion: reduce) { .sc, .mini, .bar i, button, .reel, .slot.land .reel { transition: none; animation: none !important; } }
 </style>
@@ -156,7 +154,7 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; }
   var SMALL = { "ぁ": "あ", "ぃ": "い", "ぅ": "う", "ぇ": "え", "ぉ": "お", "ゃ": "や", "ゅ": "ゆ", "ょ": "よ", "ゎ": "わ", "っ": "つ" };
   var DEFAULTS = { laps: 2, vis: "live" }; /* laps: 0 = 無限(終了ボタンで終わる) */
   var S = { isHost: false, pid: null, name: "", code: null, room: null, roomReady: false, players: [], entries: new Map(), rejCb: null };
-  var lastKey = null, tTimer = null, replayToken = 0;
+  var lastKey = null, tTimer = null;
   var peer = null, hostConn = null, conns = {};
 
   /* ---------- helpers ---------- */
@@ -637,23 +635,12 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; }
         prev ? h("div", { class: "g" }, "前の絵への答え「" + e.guess + "」 ", ok ? h("span", { class: "ok" }, "✓ 正解") : h("span", { class: "ng" }, "✗ 正解は「" + prev.word + "」")) : null,
         viewCanvas(e.strokes), h("div", { class: "w" }, "「" + e.word + "」"));
     });
-    var replayBtn = h("button", { onclick: function () {
-      var tok = ++replayToken; replayBtn.disabled = true;
-      minis.concat(cards).forEach(function (el) { el.classList.add("veiled"); });
-      steps.forEach(function (_, k) {
-        setTimeout(function () {
-          if (tok !== replayToken) return;
-          minis[k].classList.remove("veiled"); cards[k].classList.remove("veiled");
-          cards[k].scrollIntoView({ behavior: "smooth", block: "center" });
-          if (k === steps.length - 1) replayBtn.disabled = false;
-        }, 400 + k * 1800);
-      });
-    } }, "▶ 順番に再生");
+    var againBtn = h("button", { class: "primary", onclick: playAgain }, "もう一度遊ぶ");
     return shell(
       h("div", { class: "col", style: "gap:10px" }, h("h1", {}, "結果発表"), h("p", { class: "quote" }, banner),
         steps.length > 1 ? h("p", { class: "muted" }, "答えが合っていた数: " + hit + " / " + (steps.length - 1)) : null),
       h("div", { class: "card" }, h("h3", {}, "しりとりの流れ"), chain),
-      h("div", { class: "step" }, h("h3", {}, "全部の絵"), replayBtn),
+      h("div", { class: "step" }, h("h3", {}, "全部の絵"), againBtn),
       h("div", { class: "strip", "aria-label": "全体の流れ" }, minis),
       h("div", { class: "steps" }, cards),
       h("div", {}, h("button", { onclick: backHome }, "ホームに戻る")));
@@ -694,6 +681,14 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; }
       else if (S.room.phase === "play" && (S.room.order || []).indexOf(pid) >= 0 && (S.room.left || []).indexOf(pid) < 0) {
         S.room = Object.assign({}, S.room, { left: (S.room.left || []).concat(pid) }); bcast({ t: "room", room: S.room });
       }
+    } else if (m.t === "again") {
+      /* 同じメンバーでロビーに戻る(退出した人は外す) */
+      if (S.room.phase !== "play") return {};
+      var left = S.room.left || [];
+      S.players = S.players.filter(function (p) { return left.indexOf(p.id) < 0; });
+      S.entries = new Map();
+      S.room = { host: S.room.host, phase: "lobby", settings: S.room.settings || Object.assign({}, DEFAULTS), createdAt: Date.now() };
+      bcast({ t: "reset", room: S.room, players: S.players });
     } else if (m.t === "entry") {
       if (S.room.phase !== "play") return { err: "ゲーム中ではありません" };
       d = derive();
@@ -767,7 +762,8 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; }
           entered = true; S.code = code; S.isHost = false;
           S.room = m.room; S.players = m.players; S.entries = new Map(m.entries); S.roomReady = true;
           ls("room", code); ls("role", "client"); setHash(code);
-        } else if (m.t === "room") S.room = m.room;
+        } else if (m.t === "reset") { S.room = m.room; S.players = m.players; S.entries = new Map(); }
+        else if (m.t === "room") S.room = m.room;
         else if (m.t === "players") S.players = m.players;
         else if (m.t === "entry") S.entries.set(m.key, m.entry);
         render();
@@ -795,6 +791,11 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; }
       phase: "play", order: shuffle(S.players.map(function (p) { return p.id; })),
       topic: TOPICS[Math.floor(Math.random() * TOPICS.length)], startedAt: Date.now(), ended: false
     }));
+  }
+  function playAgain() {
+    if (S.isHost) hostApply({ t: "again" }, S.pid);
+    else if (hostConn && hostConn.open) hostConn.send({ t: "again" });
+    else toast("ホストとつながっていません");
   }
   function endNow() { if (S.isHost && S.entries.size > 0) setRoom(Object.assign({}, S.room, { ended: true })); else toast("まだ1枚も完成していません"); }
   function submit(ent) {
