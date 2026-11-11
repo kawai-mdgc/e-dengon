@@ -338,6 +338,7 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; }
   }
   function shell() { return h("div", { class: "wrap" }, header(), h("main", {}, Array.prototype.slice.call(arguments))); }
   function view() {
+    if (!S.code && S.joining) return { key: "joining", build: function () { return shell(h("p", { class: "muted" }, "部屋に参加中…")); } };
     if (!S.code) return S.album ? { key: "album", build: vAlbum } : { key: "home", build: vHome };
     if (!S.roomReady) return { key: "loading", build: function () { return shell(h("p", { class: "muted" }, "部屋に接続中…")); } };
     if (!S.room) return { key: "gone", build: function () { return shell(h("div", { class: "card" }, h("h2", {}, "部屋が見つかりません"), h("button", { class: "primary", onclick: backHome }, "ホームに戻る"))); } };
@@ -354,21 +355,34 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; }
     else if (v.update) v.update();
   }
 
+  function inviteCode() { var m = location.hash.match(/^#room-([A-Za-z]{4})$/); return m ? m[1].toUpperCase() : null; }
+  /* 招待リンクで開いたとき、ニックネームが分かっていれば参加画面を飛ばして待機画面に入る */
+  function tryInvite() {
+    var c = inviteCode();
+    if (!c || S.code || S.joining || !S.name) return false;
+    if (ls("role") === "host" && ls("room") === c) return false;
+    joinRoom(c);
+    return true;
+  }
   function vHome() {
     var nick = h("input", { id: "nick", maxlength: "12", placeholder: "例: たろう", value: S.name, autocomplete: "nickname" });
     var codeIn = h("input", { id: "code", class: "code", maxlength: "4", placeholder: "ABCD", autocomplete: "off" });
-    var m = location.hash.match(/^#room-([A-Za-z0-9]{4})$/); if (m) codeIn.value = m[1].toUpperCase();
+    var m = inviteCode();
     function nm() { var n = nick.value.trim(); if (!n) { toast("ニックネームを入れてください"); nick.focus(); return null; } S.name = n; ls("name", n); return n; }
     var nameCard = h("div", {}, h("label", { for: "nick" }, "ニックネーム"), nick);
-    var createBtn = h("button", { class: m ? "" : "primary", onclick: function () { if (nm()) createRoom(); } }, "部屋をつくる(ホスト)");
-    var joinBtn = h("button", { class: m ? "primary" : "", onclick: function () { if (nm()) joinRoom(codeIn.value.trim().toUpperCase()); } }, "参加する");
-    var joinBox = h("div", { class: "col" }, h("div", {}, h("label", { for: "code" }, m ? "招待された部屋コード" : "友だちの部屋コード"), codeIn), joinBtn);
+    if (m) {
+      /* 招待リンクから来た人: ニックネームを入れるだけで待機画面に入る */
+      return shell(h("div", { class: "card" },
+        h("h2", {}, "部屋 " + m + " に招待されています"), nameCard,
+        h("button", { class: "primary", onclick: function () { if (nm()) joinRoom(m); } }, "参加する"),
+        h("button", { class: "ghost", style: "align-self:flex-start", onclick: function () { setHash(""); lastKey = null; render(); } }, "ホームへ")));
+    }
+    var createBtn = h("button", { class: "primary", onclick: function () { if (nm()) createRoom(); } }, "部屋をつくる(ホスト)");
+    var joinBtn = h("button", { onclick: function () { if (nm()) joinRoom(codeIn.value.trim().toUpperCase()); } }, "参加する");
+    var joinBox = h("div", { class: "col" }, h("div", {}, h("label", { for: "code" }, "友だちの部屋コード"), codeIn), joinBtn);
     return shell(
-      h("section", { class: "col", style: "gap:12px" },
-        h("h1", {}, "絵で、しりとり。"),
-        h("div", { class: "flow", "aria-label": "ゲームの流れ" }, h("b", { class: "d" }, "絵を描く"), h("i", {}, "→"), h("b", {}, "何の絵か答える"), h("i", {}, "→"), h("b", { class: "d" }, "最後の文字から絵を描く"), h("i", {}, "→ … →"), h("b", {}, "答え合わせ"))),
       h("div", {}, h("button", { onclick: function () { S.album = true; render(); } }, "アルバム")),
-      h("div", { class: "card" }, nameCard, m ? [joinBox, h("hr", { style: "border:0;border-top:1.5px dashed var(--line);width:100%;margin:2px 0" }), createBtn] : [createBtn, h("hr", { style: "border:0;border-top:1.5px dashed var(--line);width:100%;margin:2px 0" }), joinBox]),
+      h("div", { class: "card" }, nameCard, createBtn, h("hr", { style: "border:0;border-top:1.5px dashed var(--line);width:100%;margin:2px 0" }), joinBox),
       h("div", { class: "card" },
         h("h3", {}, "遊び方"),
         h("ol", {},
@@ -748,9 +762,10 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; }
   function joinRoom(code, silent) {
     if (!/^[A-Z]{4}$/.test(code)) { toast("部屋コードは英字4文字です"); return; }
     resetNet();
+    S.joining = true; render();
     var p = new Peer(); peer = p;
     var opened = false, entered = false;
-    function fail(msg) { if (!silent) toast(msg); if (!entered) { resetNet(); if (silent) { ls("room", null); ls("role", null); } render(); } }
+    function fail(msg) { if (!silent) toast(msg); if (!entered) { S.joining = false; resetNet(); if (silent) { ls("room", null); ls("role", null); } lastKey = null; render(); } }
     p.on("open", function () {
       var conn = p.connect(PREFIX + code, { reliable: true }); hostConn = conn;
       conn.on("open", function () { opened = true; conn.send({ t: "join", pid: S.pid, name: S.name }); });
@@ -759,7 +774,7 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; }
         if (m.t === "err") { fail(m.msg); return; }
         if (m.t === "rej") { toast(m.msg); if (S.rejCb) S.rejCb(); return; }
         if (m.t === "state") {
-          entered = true; S.code = code; S.isHost = false;
+          entered = true; S.joining = false; S.code = code; S.isHost = false;
           S.room = m.room; S.players = m.players; S.entries = new Map(m.entries); S.roomReady = true;
           ls("room", code); ls("role", "client"); setHash(code);
         } else if (m.t === "reset") { S.room = m.room; S.players = m.players; S.entries = new Map(); }
@@ -810,13 +825,14 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; }
   }
 
   /* ---------- boot ---------- */
-  window.addEventListener("hashchange", function () { if (!S.code && lastKey === "home") { lastKey = null; render(); } });
+  window.addEventListener("hashchange", function () { if (!S.code && !tryInvite() && lastKey === "home") { lastKey = null; render(); } });
   S.name = ls("name") || "";
   S.pid = ls("pid");
   if (!S.pid) { S.pid = cleanId(Math.random().toString(36).slice(2, 10) + Date.now().toString(36)); ls("pid", S.pid); }
   render();
   (function resume() {
     var saved = ls("room"), role = ls("role"), raw, st = null;
+    if (tryInvite()) return;
     if (!saved || !/^[A-Z]{4}$/.test(saved)) return;
     if (role === "host") {
       raw = ls("host." + saved);
