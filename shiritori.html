@@ -557,7 +557,7 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; }
     names = S.players.map(function (p) { return p.name; });
     for (i = 0; i < g.n; i++) {
       e = S.entries.get(String(i)); nx = S.entries.get(String(i + 1));
-      recs.push({ id: gid + "-" + i, gid: gid, i: i, ts: S.room.startedAt, room: S.code, author: nameOf(e.author), word: e.word,
+      recs.push({ id: gid + "-" + i, gid: gid, i: i, ts: S.room.startedAt, room: S.code, author: nameOf(e.author), authorId: e.author, word: e.word,
         answer: nx ? nx.guess : null, answerer: nx ? nameOf(nx.author) : null, players: names, strokes: e.strokes });
     }
     adb().then(function () { return tx("readwrite", function (st) { recs.forEach(function (r) { st.put(r); }); }); })
@@ -566,29 +566,29 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; }
   function pad(n) { return n < 10 ? "0" + n : "" + n; }
   function fmtDate(ts) { var d = new Date(ts); return d.getFullYear() + "年" + (d.getMonth() + 1) + "月" + d.getDate() + "日 " + pad(d.getHours()) + ":" + pad(d.getMinutes()); }
   function vAlbum() {
-    var box = h("div", { class: "col", style: "gap:22px" }, h("p", { class: "muted" }, "読み込み中…"));
+    var box = h("div", { class: "col" }, h("p", { class: "muted" }, "読み込み中…"));
+    var filter = "all", all = [];
+    var filterBox = h("div", {});
+    function mine(r) { return r.authorId ? r.authorId === S.pid : r.author === S.name; }
+    function draw() {
+      filterBox.replaceChildren(seg([["all", "一覧"], ["mine", "わたしが描いた絵"]], filter, true, function (v) { filter = v; draw(); }));
+      fillAlbum(box, filter === "mine" ? all.filter(mine) : all, load, filter === "mine");
+    }
     function load() {
-      albumAll().then(function (list) { fillAlbum(box, list, load); }, function () { box.replaceChildren(h("p", { class: "muted" }, "このブラウザではアルバムを使えません。")); });
+      albumAll().then(function (list) { all = list; draw(); }, function () { box.replaceChildren(h("p", { class: "muted" }, "このブラウザではアルバムを使えません。")); });
     }
     load();
     return shell(
       h("div", { class: "step" }, h("h2", {}, "アルバム"), h("button", { onclick: function () { S.album = false; render(); } }, "ホームに戻る")),
       h("p", { class: "muted" }, "このブラウザで遊んだときの絵が、結果発表のあとに自動で入ります。ブラウザのデータを消すと、アルバムも消えます。"),
-      box);
+      filterBox, box);
   }
-  function fillAlbum(box, list, reload) {
-    if (!list.length) { box.replaceChildren(h("p", { class: "muted" }, "まだ絵がありません。遊ぶと、結果発表のあとにここへ入ります。")); return; }
-    var groups = {};
-    list.forEach(function (r) { (groups[r.gid] = groups[r.gid] || []).push(r); });
-    var gids = Object.keys(groups).sort(function (a, b) { return groups[b][0].ts - groups[a][0].ts; });
-    box.replaceChildren.apply(box, gids.map(function (gid) {
-      var rs = groups[gid].sort(function (a, b) { return a.i - b.i; });
-      return h("section", { class: "col", style: "gap:8px" },
-        h("h3", {}, fmtDate(rs[0].ts)), h("p", { class: "muted" }, "参加: " + rs[0].players.join("、")),
-        h("div", { class: "grid" }, rs.map(function (r) {
-          return h("button", { class: "thumb", onclick: function () { openPic(r, reload); } }, viewCanvas(r.strokes), h("span", {}, r.word));
-        })));
-    }));
+  function fillAlbum(box, list, reload, onlyMine) {
+    if (!list.length) { box.replaceChildren(h("p", { class: "muted" }, onlyMine ? "あなたが描いた絵はまだありません。" : "まだ絵がありません。遊ぶと、結果発表のあとにここへ入ります。")); return; }
+    var sorted = list.slice().sort(function (a, b) { return b.ts - a.ts || a.i - b.i; });
+    box.replaceChildren(h("div", { class: "grid" }, sorted.map(function (r) {
+      return h("button", { class: "thumb", onclick: function () { openPic(r, reload); } }, viewCanvas(r.strokes), h("span", {}, r.word), h("span", { class: "muted" }, r.author));
+    })));
   }
   function openPic(r, reload) {
     var armed = false, ov;
