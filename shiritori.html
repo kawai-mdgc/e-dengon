@@ -153,7 +153,7 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; }
   var COLORS = ["#1b1b1f", "#e5484d", "#f5a524", "#f2d12e", "#3fa86b", "#2f6fed", "#8e4ec6", "#8b5a3c"];
   var TOPICS = ["りんご", "ねこ", "さかな", "ひこうき", "じてんしゃ", "うさぎ", "いちご", "ひまわり", "とけい", "かさ", "ろけっと", "すいか", "たいよう", "おにぎり", "ぼうし", "くつ", "でんしゃ", "にじ", "くじら", "かめ", "さくら", "たこ", "ぶた", "とまと", "ばなな", "めがね", "たまご", "ちょうちょ", "こたつ", "くつした", "らくだ", "いるか", "まくら", "ゆきだるま", "でんわ", "ぶどう", "さんた", "ごりら", "らっぱ", "ぴあの", "かぼちゃ", "てんとうむし", "おばけ", "ほうき", "どーなつ", "ぱんだ", "しろくま", "あひる", "かえる", "へび"];
   var SMALL = { "ぁ": "あ", "ぃ": "い", "ぅ": "う", "ぇ": "え", "ぉ": "お", "ゃ": "や", "ゅ": "ゆ", "ょ": "よ", "ゎ": "わ", "っ": "つ" };
-  var DEFAULTS = { laps: 2, vis: "live" }; /* laps: 0 = 無限(終了ボタンで終わる) */
+  var DEFAULTS = { laps: 2, vis: "secret" }; /* laps: 0 = 無限(終了ボタンで終わる) */
   var S = { isHost: false, pid: null, name: "", code: null, room: null, roomReady: false, players: [], entries: new Map(), rejCb: null };
   var lastKey = null, tTimer = null;
   var peer = null, hostConn = null, conns = {};
@@ -406,7 +406,7 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; }
       h("div", {}, h("label", {}, "何周するか(人数×周回数の枚数でおしまい)"),
         seg([[1, "1周"], [2, "2周"], [3, "3周"], [0, "無限"]], set.laps, hostOk, function (v) { setOpt("laps", v); })),
       h("div", {}, h("label", {}, "順番を待っている人から見える絵"),
-        seg([["live", "完成した絵だけ見える"], ["secret", "完全シークレット"]], set.vis, hostOk, function (v) { setOpt("vis", v); })),
+        seg([["secret", "完全シークレット"], ["live", "完成した絵だけ見える"]], set.vis, hostOk, function (v) { setOpt("vis", v); })),
       h("p", { class: "muted" }, (hostOk ? "ホストだけが変えられます。" : "設定はホストが決めます。") + "「ん」で終わる言葉を描いた人の負けで終了します。「無限」のときは、ホストの「ここで終了」で終わります。"));
   }
   function vLobby() {
