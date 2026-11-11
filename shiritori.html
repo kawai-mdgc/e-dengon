@@ -120,8 +120,8 @@ canvas.view { cursor: default; }
 .ng { color: var(--bad); font-weight: 700; }
 .mini.new canvas { border-color: var(--bad); box-shadow: 0 0 0 2px var(--bad), 0 0 16px 4px var(--glow); }
 .mini.new b { color: var(--bad); }
-.chain { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; font-weight: 700; font-size: 20px; line-height: 1.5; }
-.chain i { font-style: normal; color: var(--muted); font-size: 16px; padding-left: 6px; }
+.chain { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; font-weight: 700; font-size: 20px; line-height: 1.5; }
+.chain i { font-style: normal; color: var(--muted); font-size: 16px; }
 .chain .ng { display: inline-block; padding: 0 10px; border-radius: 8px; border: 1.5px solid var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); }
 .chain .ng small { font-size: 14px; font-weight: 500; margin-left: 4px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
@@ -197,18 +197,14 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; }
   /* 比較用: 点(゛)や丸(゜)は無視する。こ=ご、は=ば=ぱ */
   function base(s) { return norm(s).normalize("NFD").replace(/[゙゚]/g, "").split("").map(function (c) { return SMALL[c] || c; }).join(""); }
   function same(a, b) { return base(a) === base(b); }
-  /* 答えの先頭の文字のヒント(2人目より先で使う): 前の人の答えの最後の文字 */
-  function hintFor(entries, t) { var p = t >= 2 ? entries.get(String(t - 1)) : null; return p && p.guess ? lastKana(norm(p.guess)) : null; }
   function checkTurn(room, entries, t, e) {
-    var word = norm(e.word), guess, hint;
+    var word = norm(e.word), guess;
     if (!isKana(word) || word.length < 2) return "言葉はひらがな2文字以上で入れてください";
     if (t === 0) { if (word !== norm(room.topic)) return "お題の言葉で描いてください"; }
     else {
       guess = norm(e.guess);
       if (!isKana(guess)) return "答えはひらがなで入れてください";
       if (lastKana(guess) === "ん") return "「ん」で終わる答えは使えません。別の答えを考えてください";
-      hint = hintFor(entries, t);
-      if (hint && !same(firstKana(guess), hint)) return "この絵は「" + hint + "」から始まる言葉です。答えもそこから始めてください";
       if (!same(firstKana(word), lastKana(guess))) return "「" + lastKana(guess) + "」から始まる言葉にしてください";
     }
     var dup = false; entries.forEach(function (v) { if (same(v.word, word)) dup = true; });
@@ -453,8 +449,6 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; }
         var gs = norm(guessIn.value);
         if (!isKana(gs)) { toast("答えはひらがなで入れてください"); return; }
         if (lastKana(gs) === "ん") { toast("「ん」で終わる答えは使えません。別の答えを考えてください"); return; }
-        var hn = hintFor(S.entries, t);
-        if (hn && !same(firstKana(gs), hn)) { toast("この絵は「" + hn + "」から始まる言葉です。答えもそこから始めてください"); return; }
         startMsg.textContent = "「" + lastKana(gs) + "」から始まる言葉を描こう";
         wordIn.placeholder = lastKana(gs) + "…"; drawBox.hidden = false; wordIn.focus();
       } }, "決定");
@@ -464,7 +458,6 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; }
           ? h("div", { class: "card" }, h("h3", {}, "前の人が描いた絵"), viewCanvas(prev ? prev.strokes : []))
           : h("div", { class: "card" }, h("h3", {}, "これまでの絵"), logStrip(g), h("p", { class: "muted" }, "赤く光っているのが、前の人が描いた最新の絵です。")),
         h("div", { class: "card" },
-          hintFor(S.entries, t) ? h("p", { class: "quote" }, "ヒント: この絵は「" + hintFor(S.entries, t) + "」から始まる言葉です") : null,
           h("div", {}, h("label", { for: "guess" }, "この絵は何? ひらがなで答えてください"), guessIn), h("div", {}, gbtn)),
         drawBox];
     }
@@ -608,7 +601,7 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; }
     /* しりとりの流れ: 次の人の答えが違っていたら、その答えを❌で出して正解を添える */
     var chain = h("div", { class: "chain" }, steps.map(function (e, k) {
       var nx = steps[k + 1], wrong = nx && !same(nx.guess, e.word);
-      return [k ? h("i", {}, "↓") : null,
+      return [k ? h("i", {}, "→") : null,
         wrong ? h("span", { class: "ng" }, "❌" + nx.guess, h("small", {}, "(正解: " + e.word + ")")) : h("span", {}, e.word)];
     }));
     var minis = steps.map(function (e) { return h("div", { class: "mini" }, viewCanvas(e.strokes), h("b", {}, e.word), h("span", { class: "muted" }, nameOf(e.author))); });
