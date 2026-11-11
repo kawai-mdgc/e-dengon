@@ -506,8 +506,27 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; }
       if (n !== v) inp.value = n;
       note.hidden = !/[一-鿿]/.test(inp.value);
     }
+    /* 変換中は、変換前のひらがな(読み)を覚えておく。確定で漢字になったら、その読みに戻す */
+    var reading = "";
+    function toHira(s) { return s.normalize("NFKC").replace(/[ァ-ヶ]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0x60); }); }
+    inp.addEventListener("compositionstart", function () { reading = ""; });
+    inp.addEventListener("compositionupdate", function (e) {
+      var d = toHira(e.data || "");
+      if (/^[ぁ-ゖー]+$/.test(d)) reading = d;
+    });
+    inp.addEventListener("compositionend", function (e) {
+      var d = e.data || "", v = inp.value, i;
+      if (reading && /[一-鿿]/.test(d)) {
+        i = v.lastIndexOf(d);
+        if (i >= 0) {
+          inp.value = v.slice(0, i) + reading + v.slice(i + d.length);
+          try { inp.setSelectionRange(i + reading.length, i + reading.length); } catch (x) {}
+        }
+      }
+      reading = "";
+      fix();
+    });
     inp.addEventListener("input", function (e) { if (!e.isComposing) fix(); });
-    inp.addEventListener("compositionend", fix);
     inp.addEventListener("blur", fix);
     Object.defineProperty(inp, "box", { value: h("div", { class: "col", style: "gap:4px" }, inp, note) });
     return inp;
